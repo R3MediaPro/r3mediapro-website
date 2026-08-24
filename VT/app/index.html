@@ -1510,7 +1510,7 @@ tr.selrow td{background:var(--accent-soft)}
 /* Build stamp — bump on each deployment to match the Apps Script deployment
    label. Must equal BUILD in Code.gs; the admin Tools menu shows both so a
    half-paste is obvious. */
-var UI_BUILD = 'V32';
+var UI_BUILD = 'V33';
 
 var S = {
   serverBuild:'',
@@ -1888,6 +1888,15 @@ function doGate(){
     if(S.eventId) localStorage.setItem('vt_event', S.eventId);
     inp.value='';
     settle();
+    // The verify reply carries the whole payload now — straight in, no second
+    // round trip. If it is missing (older server), fall back to the old path.
+    if(r.bootstrap){
+      try{
+        applyBootstrap(r.bootstrap); writeCache(r.bootstrap);
+        S.lastSync = Date.now(); startPolling(); paintSync(); maybeShowIntro();
+        return;
+      }catch(e){ /* fall through to the normal load */ }
+    }
     bootShow('Code accepted — loading the tracker…',
              'The first open takes a few seconds. After this it opens right away.');
     document.getElementById('gate').classList.remove('on');
