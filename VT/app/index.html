@@ -518,6 +518,11 @@ td.t-link a{display:block;overflow:hidden;text-overflow:ellipsis;white-space:now
 .toast.ok .ic{fill:var(--green)}
 .toast.err .ic{fill:var(--red)}
 #boot{position:fixed;inset:0;display:grid;place-items:center;background:var(--bg);z-index:300}
+.bootbox{display:flex;flex-direction:column;align-items:center;gap:14px;padding:20px;text-align:center}
+.bootmsg{font-size:14px;font-weight:600;color:var(--txt-2)}
+.bootbar{width:min(240px,70vw);height:6px;border-radius:99px;background:#1e2836;overflow:hidden}
+.bootbar i{display:block;height:100%;width:0;background:var(--accent);border-radius:99px;transition:width .3s ease}
+.boothint{font-size:11.5px;color:var(--txt-3);min-height:15px;max-width:300px;line-height:1.5}
 .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--accent);
   border-radius:99px;animation:sp .7s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -856,7 +861,14 @@ tr.selrow td{background:var(--accent-soft)}
 </head>
 <body>
 
-<div id="boot"><div class="spin"></div></div>
+<div id="boot">
+  <div class="bootbox">
+    <div class="spin"></div>
+    <div class="bootmsg" id="bootMsg">Opening the tracker…</div>
+    <div class="bootbar"><i id="bootBarFill"></i></div>
+    <div class="boothint" id="bootHint"></div>
+  </div>
+</div>
 
 <!-- ===== PASSWORD GATE ===== -->
 <div id="gate">
@@ -868,7 +880,7 @@ tr.selrow td{background:var(--accent-soft)}
     <p>Enter the password to open the video tracker.</p>
     <input id="gatePw" type="password" placeholder="Password" autocomplete="current-password"
            onkeydown="if(event.key==='Enter')doGate()">
-    <button class="btn primary" style="width:100%;justify-content:center;margin-top:12px" onclick="doGate()">
+    <button class="btn primary" id="gateGo" style="width:100%;justify-content:center;margin-top:12px" onclick="doGate()">
       Open tracker
     </button>
     <div class="gate-err" id="gateErr"></div>
@@ -1498,7 +1510,7 @@ tr.selrow td{background:var(--accent-soft)}
 /* Build stamp — bump on each deployment to match the Apps Script deployment
    label. Must equal BUILD in Code.gs; the admin Tools menu shows both so a
    half-paste is obvious. */
-var UI_BUILD = 'V31';
+var UI_BUILD = 'V32';
 
 var S = {
   serverBuild:'',
@@ -1686,6 +1698,7 @@ function applyBootstrap(d){
     document.getElementById('sheetLink').href = S.sheetUrl;
     if(BOOT_VIEW && ['board','table','showday','uploaders'].indexOf(BOOT_VIEW)>=0) S.view=BOOT_VIEW;
 
+    bootDone();
     document.getElementById('boot').style.display='none';
     document.getElementById('gate').classList.remove('on');
     if(S.me.role==='admin') initLastSeen();
@@ -1696,6 +1709,11 @@ function boot(){
   // Paint what this device last saw, so the tracker is usable while the round
   // trip runs. The sync pill still shows the real age, so nothing pretends to
   // be fresher than it is.
+  // Don't restart the overlay if the gate already put a message up — the
+  // "code accepted" line would flash away after one frame.
+  if(!BOOT_TIMER && document.getElementById('boot').style.display !== 'none'){
+    bootShow('Opening the tracker…', 'The first open takes a few seconds. After that it opens right away.');
+  }
   var cached = readCache();
   var painted = false;
   if(cached && cached.d){
@@ -1818,31 +1836,64 @@ function startPolling(){
    internal event's name on a public page. It also cost a round trip before the
    box could settle, so dropping it makes the gate appear at once. */
 function showGate(){
+  clearInterval(BOOT_TIMER);
   S.vtok=''; localStorage.removeItem('vt_view'); clearCache();
   document.getElementById('boot').style.display='none';
   document.getElementById('gate').classList.add('on');
   setTimeout(function(){ document.getElementById('gatePw').focus(); },150);
 }
 
+/* The boot overlay, with a bar that is honest about the wait and vague about
+   the number: it eases toward 90% on the platform's usual round-trip and only
+   reaches 100% when the data actually lands. The hint tells the truth that
+   matters — the first open is the slow one; the cache makes every later open
+   instant. */
+var BOOT_TIMER = null;
+function bootShow(msg, hint){
+  var b = document.getElementById('boot'); b.style.display='';
+  var m = document.getElementById('bootMsg');  if(m) m.textContent = msg  || 'Opening the tracker…';
+  var h = document.getElementById('bootHint'); if(h) h.textContent = hint || '';
+  var f = document.getElementById('bootBarFill'); if(!f) return;
+  var t0 = Date.now(); f.style.width = '4%';
+  clearInterval(BOOT_TIMER);
+  BOOT_TIMER = setInterval(function(){
+    var sec = (Date.now() - t0) / 1000;
+    f.style.width = Math.min(90, 100 * (1 - Math.exp(-sec / 1.6))) + '%';
+  }, 120);
+}
+function bootDone(){
+  clearInterval(BOOT_TIMER); BOOT_TIMER = null;
+  var f = document.getElementById('bootBarFill'); if(f) f.style.width = '100%';
+}
+
 function doGate(){
   var pw = document.getElementById('gatePw').value;
-  if(!pw) return;
+  if(!pw || S.gateBusy) return;
+  var go = document.getElementById('gateGo'), inp = document.getElementById('gatePw');
+  function settle(){ S.gateBusy=false; go.disabled=false; go.textContent='Open tracker'; inp.disabled=false; }
+  // The tap registers NOW — the round trip takes a couple of seconds, and a
+  // button that sits unchanged for that long reads as a missed press.
+  S.gateBusy = true; go.disabled = true; go.textContent = 'Checking the code…'; inp.disabled = true;
   document.getElementById('gateErr').textContent = '';
   api('verifyPassword', pw).then(function(r){
     if(!r.ok){
+      settle();
       document.getElementById('gateErr').textContent = r.msg;
-      document.getElementById('gatePw').select();
+      inp.select();
       return;
     }
     S.vtok = r.token || '';
     S.eventId = r.eventId || '';
     if(S.vtok) localStorage.setItem('vt_view', S.vtok);
     if(S.eventId) localStorage.setItem('vt_event', S.eventId);
-    document.getElementById('gatePw').value='';
-    document.getElementById('boot').style.display='';
+    inp.value='';
+    settle();
+    bootShow('Code accepted — loading the tracker…',
+             'The first open takes a few seconds. After this it opens right away.');
     document.getElementById('gate').classList.remove('on');
     boot();
   }).catch(function(e){
+    settle();
     document.getElementById('gateErr').textContent = (e && e.message) ? e.message : String(e);
   });
 }
