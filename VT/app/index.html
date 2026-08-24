@@ -1510,7 +1510,7 @@ tr.selrow td{background:var(--accent-soft)}
 /* Build stamp — bump on each deployment to match the Apps Script deployment
    label. Must equal BUILD in Code.gs; the admin Tools menu shows both so a
    half-paste is obvious. */
-var UI_BUILD = 'V33';
+var UI_BUILD = 'V34';
 
 var S = {
   serverBuild:'',
@@ -1591,7 +1591,8 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbwSNGWQmyLeb0S-NrkjUnJmgF
 
 function apiCall(fn, args){
   var payload = JSON.stringify({ fn:fn, args:args });
-  var TRIES = 3;
+  var TRIES = 5;   // raised from 3 once the server grew replay guards — a
+                   // retry can no longer double-file, so patience is free
 
   function attempt(i){
     return fetch(API_URL, {
@@ -4033,9 +4034,26 @@ function sendAgainst(videoId, who, note){
                   S.me.role==='admin' ? 'It’s on the tracker.' : 'The video team has your link.');
         setTimeout(closeAll, 1400);
       }).catch(function(e){
-        reportProblem('link', videoId, String((e&&e.message)||e), { link: link, submitter: who.name, email: who.email, agency: who.agency });
-        sfError('Couldn’t send the link', String((e&&e.message)||e),
-          function(){ sendAgainst(videoId, who, note); });
+        var msg = String((e&&e.message)||e);
+        function fail(){
+          reportProblem('link', videoId, msg, { link: link, submitter: who.name, email: who.email, agency: who.agency });
+          sfError('Couldn’t send the link', msg, function(){ sendAgainst(videoId, who, note); });
+        }
+        // "Google hiccuped" often means the send LANDED and only the reply
+        // was lost — that exact false failure hit a real sender in week one.
+        // Ask the sheet what it actually has before telling anyone it failed.
+        if(!/hiccup|unreadable|Failed to fetch|NetworkError|Load failed|Timeout/i.test(msg)) return fail();
+        sfBusy('Double-checking…', {hint:'The reply got lost — making sure the link arrived.'});
+        apiQuiet('getBootstrap', S.token, S.vtok, S.eventId).then(function(d){
+          var v = (d.videos||[]).filter(function(x){ return x.id===videoId; })[0];
+          var hit = v && (v.history||[]).some(function(h){
+            return String(h.link||'').trim()===link && Date.now()-h.time < 5*60000; });
+          if(!hit) return fail();
+          applyBootstrap(d); writeCache(d); S.lastSync=Date.now(); paintSync();
+          sfSuccess(S.me.role==='admin' ? 'Saved — it arrived.' : 'Got it — thank you!',
+                    'The link landed; the network only ate the confirmation.');
+          setTimeout(closeAll, 1600);
+        }).catch(fail);
       });
   } else {
     if(!S.pendingFile) return toast('Choose a file to upload.','err');
