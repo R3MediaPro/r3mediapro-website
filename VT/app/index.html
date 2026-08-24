@@ -1265,6 +1265,13 @@ tr.selrow td{background:var(--accent-soft)}
         and the URL never changes.</div>
     </div>
     <div class="field">
+      <label>Download filer</label>
+      <div class="hint" style="margin:0 0 8px">A small helper on the Mac renames what you download to
+        <b>VT05_v2 - Title</b> and files it into the show folder. Its installer asks for this token once per Mac.</div>
+      <button class="btn sm" onclick="copyFilerToken()">Copy setup token</button>
+    </div>
+
+    <div class="field">
       <label>Problems</label>
       <div id="probSummary" class="hint" style="margin:0 0 8px"></div>
       <button class="btn sm" onclick="copyProblemReport()">Copy problem report</button>
@@ -1538,7 +1545,7 @@ tr.selrow td{background:var(--accent-soft)}
 /* Build stamp — bump on each deployment to match the Apps Script deployment
    label. Must equal BUILD in Code.gs; the admin Tools menu shows both so a
    half-paste is obvious. */
-var UI_BUILD = 'V35';
+var UI_BUILD = 'V36';
 
 var S = {
   serverBuild:'',
@@ -2690,6 +2697,9 @@ function downloadAndMark(id){
   var c = currentCut(v);
   var plan = downloadPlan(c.fileId, c.link);
   window.open(plan.url, '_blank');
+  // Tell the filer on the Mac what this download IS, so the file that lands
+  // in ~/Downloads can be renamed and filed without guessing. Best-effort.
+  apiQuiet('noteDownload', id, S.token, S.eventId).catch(function(){});
   if(v.showStatus==='Downloaded') return;                 // already there
   api('setShowStatus', id, 'Downloaded', S.token, '', S.eventId).then(function(r){
     S.videos = r.videos; renderAll();
@@ -3147,6 +3157,14 @@ function problemReportText(){
     L.push('');
   });
   return L.join('\n');
+}
+function copyFilerToken(){
+  if(!S.token) return toast('Unlock admin first.','err');
+  var t=S.token;
+  function done(){ toast('Token copied — paste it into the filer installer.','ok'); }
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(t).then(done, function(){ fallbackCopy(t); done(); });
+  } else { fallbackCopy(t); done(); }
 }
 function copyProblemReport(){
   var txt = problemReportText();
