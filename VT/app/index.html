@@ -1498,7 +1498,7 @@ tr.selrow td{background:var(--accent-soft)}
 /* Build stamp — bump on each deployment to match the Apps Script deployment
    label. Must equal BUILD in Code.gs; the admin Tools menu shows both so a
    half-paste is obvious. */
-var UI_BUILD = 'V29';
+var UI_BUILD = 'V30';
 
 var S = {
   serverBuild:'',
@@ -3072,14 +3072,14 @@ function paintProblems(){
 function savePushEvents(){
   var on=[...document.querySelectorAll('#pushKinds input:checked')].map(function(i){ return i.value; });
   var was=S.pushEvents; S.pushEvents=on.join(',');
-  api('setPushEvents', S.pushEvents, S.token).then(function(r){
+  api('setPushEvents', S.pushEvents, S.token, S.eventId).then(function(r){
     toast(on.length ? 'Phone gets: '+on.length+' of 5 kinds.' : 'Nothing buzzes the phone — email and the feed still do.','ok');
   }).catch(function(e){ S.pushEvents=was; paintPush(); err(e); });
 }
 function savePushoverKeys(){
   var u=document.getElementById('poUser'), t=document.getElementById('poToken');
   if(!u.value.trim() || !t.value.trim()) return toast('Paste both the user key and the app token.','err');
-  api('setPushoverKeys', u.value.trim(), t.value.trim(), S.token).then(function(r){
+  api('setPushoverKeys', u.value.trim(), t.value.trim(), S.token, S.eventId).then(function(r){
     u.value=''; t.value='';                      // never leave a key sitting in the form
     S.pushReady=!!r.pushReady; paintPush();
     toast(r.tested ? 'Saved — test push sent, check the phone.' : 'Saved, but Pushover rejected the test — check both keys.', r.tested?'ok':'err');
@@ -3087,11 +3087,11 @@ function savePushoverKeys(){
 }
 function clearPushoverKeys(){
   confirmThen('Remove the Pushover keys?', 'Push notifications stop until you paste them again. Email and the in-app feed are unaffected.',
-    function(){ api('setPushoverKeys','','',S.token).then(function(){ S.pushReady=false; paintPush(); toast('Pushover keys removed.','ok'); }).catch(err); },
+    function(){ api('setPushoverKeys','','',S.token,S.eventId).then(function(){ S.pushReady=false; paintPush(); toast('Pushover keys removed.','ok'); }).catch(err); },
     { go:'Remove keys' });
 }
 function sendTestPush(){
-  api('sendTestPush', S.token).then(function(r){ toast(r.msg, r.ok?'ok':'err'); }).catch(err);
+  api('sendTestPush', S.token, S.eventId).then(function(r){ toast(r.msg, r.ok?'ok':'err'); }).catch(err);
 }
 function paintPush(){
   var on=String(S.pushEvents||'').split(',');
