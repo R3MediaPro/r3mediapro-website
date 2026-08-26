@@ -584,6 +584,33 @@ tr.cutrow td.handle{opacity:.75}
 /* Signed off. Deliberately quiet — green like Delivered, but an outline
    rather than a fill, so a table of final cuts doesn't read as a wall. */
 .legend .late-k{color:#e0a244}
+/* ---- billing estimate ---- */
+.est-counts{
+  display:flex;flex-wrap:wrap;gap:8px 10px;margin-bottom:18px;
+}
+.est-counts span{
+  font-size:.78rem;color:var(--muted);border:1px solid var(--line);
+  border-radius:20px;padding:4px 11px;background:var(--shade, rgba(255,255,255,.02));
+}
+.est-counts span b{color:var(--text);font-weight:700;font-variant-numeric:tabular-nums}
+.est-grid{display:flex;flex-direction:column;gap:8px}
+.est-row{display:grid;grid-template-columns:1fr 110px 130px 110px;gap:10px;align-items:center}
+.est-row.est-head{font-size:.68rem;letter-spacing:.11em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.est-row.est-head span:not(:first-child){text-align:right}
+.est-row label{font-size:.9rem}
+.est-note{display:block;font-size:.74rem;color:var(--muted);font-weight:400}
+.est-amt{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
+.est-extras{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.est-extras .est-row{grid-template-columns:1fr 110px 130px 110px}
+.est-total{
+  display:flex;justify-content:space-between;align-items:baseline;
+  margin-top:20px;padding-top:14px;border-top:1px solid var(--line);
+  font-size:.82rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:700;
+}
+.est-total b{font-size:1.5rem;color:var(--text);font-variant-numeric:tabular-nums;letter-spacing:0}
+@media (max-width:680px){
+  .est-row{grid-template-columns:1fr 80px 90px 90px;gap:6px}
+}
 .finchip{
   display:inline-flex;flex:none;align-items:center;vertical-align:middle;
   font-size:.58rem;font-weight:800;letter-spacing:.1em;
@@ -761,7 +788,7 @@ h4.sec:first-child{margin-top:0}
     </a>
     <div class="wordmark">Video Editing Tracker</div>
     <div class="spacer"></div>
-    <span class="muted" id="buildstamp" style="font-size:.72rem;color:var(--muted);opacity:.5" title="Which build of the tracker you're running">build Aug 12, 9:48 PM MT</span>
+    <span class="muted" id="buildstamp" style="font-size:.72rem;color:var(--muted);opacity:.5" title="Which build of the tracker you're running">build Aug 26, 9:49 AM MT</span>
     <span class="saveping" id="saveping">Saved</span>
     <button class="pill" id="sync-pill" onclick="openSync()" title="Sync settings">Not synced</button>
     <button class="btn ghost sm" onclick="syncNow()" title="Sync now" id="btn-syncnow">&#8635;</button>
@@ -799,6 +826,9 @@ h4.sec:first-child{margin-top:0}
   <button class="btn ghost sm" id="btn-clientcreds" onclick="openCredentials()"
           title="Draft a short email with just the page link, access code and password">
     &#128273;&nbsp; Email credentials</button>
+  <button class="btn ghost sm" onclick="openEstimate()"
+          title="Work out the billable hours and total for this project from what's been delivered">
+    &#129518;&nbsp; Estimate</button>
   <div class="spacer"></div>
   <div class="fieldgrp">
     <span class="lbl">Event code</span>
@@ -1315,6 +1345,53 @@ h4.sec:first-child{margin-top:0}
       <button class="btn ghost" onclick="mailCopy(this)">Copy message</button>
       <div class="spacer"></div>
       <button class="btn ghost" onclick="closeOverlay('ov-mail')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Billing estimate ===== -->
+<div class="overlay" id="ov-est">
+  <div class="modal">
+    <div class="modal-h">
+      <div>
+        <h2>Estimate</h2>
+        <p>Counted from what's actually been delivered. Fill in the rates and it does the rest.</p>
+      </div>
+      <button class="x" onclick="closeOverlay('ov-est')">&times;</button>
+    </div>
+    <div class="modal-b">
+      <div class="est-counts" id="est-counts"></div>
+
+      <div class="est-grid">
+        <div class="est-row est-head"><span>Line</span><span>Qty</span><span>Rate</span><span>Amount</span></div>
+
+        <div class="est-row">
+          <label for="est-days">Shoot days</label>
+          <input class="field" id="est-days" type="number" min="0" step="0.5" oninput="calcEstimate()">
+          <input class="field" id="est-dayrate" type="number" min="0" step="25" placeholder="day rate" oninput="calcEstimate()">
+          <span class="est-amt" id="est-days-amt">—</span>
+        </div>
+
+        <div class="est-row">
+          <label for="est-hours">Edit hours <span class="est-note" id="est-hours-why"></span></label>
+          <input class="field" id="est-hours" type="number" min="0" step="0.5" oninput="estHoursTouched = true; calcEstimate()">
+          <input class="field" id="est-hourrate" type="number" min="0" step="5" placeholder="hourly" oninput="calcEstimate()">
+          <span class="est-amt" id="est-hours-amt">—</span>
+        </div>
+
+        <div class="est-row" id="est-extra-rows"></div>
+      </div>
+
+      <div class="est-extras" id="est-extras"></div>
+      <button class="btn ghost sm" style="margin-top:10px" onclick="addEstExtra()">+ Add a line</button>
+
+      <div class="est-total"><span>Total</span><b id="est-total">—</b></div>
+      <p class="help" id="est-warn" style="margin-top:10px"></p>
+    </div>
+    <div class="modal-f">
+      <button class="btn" onclick="copyEstimate(this)">Copy breakdown</button>
+      <div class="spacer"></div>
+      <button class="btn ghost" onclick="closeOverlay('ov-est')">Close</button>
     </div>
   </div>
 </div>
@@ -4420,6 +4497,177 @@ function saveSyncSettings(){
   save(); updatePortalLink(); updateClientButtons();
   setSyncState(syncOn() ? (syncState === 'off' ? 'ok' : syncState) : 'off');
   startPolling();
+}
+
+/* =====================================================================
+   Billing estimate.
+
+   Not an invoicing system: Rob already has one, in 01_Finances. This only
+   works out the numbers he would otherwise hand-tally off the table, so he
+   can paste a breakdown into the invoice he already makes. No invoice
+   numbers, no tax, no payment tracking.
+
+   Editing an event is priced off the deliverable count, at one billable hour
+   per two deliverables. Projects vary with complexity, so their hours start
+   blank and stay his to enter. Rates are synced preferences, so they follow
+   him between machines and are typed once, not per job.
+   ===================================================================== */
+const EST_HOURS_PER_DELIVERABLE = 0.5;   // one hour per two deliverables
+let estHoursTouched = false;
+
+/** What the table already knows, so none of it has to be counted by hand. */
+function estimateFacts(){
+  const p = proj();
+  const d = deliverables();
+  computeOldCuts();
+  const live = p.sessions.filter(x => x.status !== 'deleted' && !x.hidden);
+  const revised = live.filter(x => !oldCuts.has(x.id) && (x.version || 1) > 1).length;
+  const secs = d.rows.reduce((t, x) => t + (Number(x.duration) || 0), 0);
+  const days = new Set(live.map(x => String(x.day || '').trim()).filter(Boolean));
+  const rooms = new Set(live.map(x => String(x.room || '').trim()).filter(Boolean));
+  return {
+    deliverables: d.total,
+    spare: d.spare.length,
+    revised,
+    runtime: secs,
+    days: days.size,
+    rooms: rooms.size,
+    isEvent: cfg().eventMode !== false
+  };
+}
+
+function money(n){
+  if (!isFinite(n) || n === 0) return '—';
+  return '$' + n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function hhmmss(secs){
+  if (!secs) return '0m';
+  const h = Math.floor(secs / 3600), m = Math.round((secs % 3600) / 60);
+  return h ? `${h}h ${m}m` : `${m}m`;
+}
+function estStore(){ return (cfg().estimate = cfg().estimate || {}); }
+
+function openEstimate(){
+  const f = estimateFacts();
+  const e = cfg().estimate || {};
+  estHoursTouched = e.hours !== undefined && e.hours !== '';
+
+  document.getElementById('est-counts').innerHTML =
+    `<span><b>${f.deliverables}</b> deliverable${f.deliverables === 1 ? '' : 's'}</span>` +
+    (f.revised ? `<span><b>${f.revised}</b> went to a later cut</span>` : '') +
+    (f.runtime ? `<span><b>${hhmmss(f.runtime)}</b> finished runtime</span>` : '') +
+    (f.days ? `<span><b>${f.days}</b> shoot day${f.days === 1 ? '' : 's'}</span>` : '') +
+    (f.rooms > 1 ? `<span><b>${f.rooms}</b> rooms</span>` : '') +
+    (f.spare ? `<span>${f.spare} not billable</span>` : '');
+
+  const val = (id, v) => { document.getElementById(id).value = (v === undefined || v === null) ? '' : v; };
+  val('est-days',     e.days !== undefined ? e.days : (f.days || ''));
+  val('est-dayrate',  e.dayRate !== undefined ? e.dayRate : prefGet('est-dayrate', ''));
+  val('est-hourrate', e.hourRate !== undefined ? e.hourRate : prefGet('est-hourrate', ''));
+
+  // An event's editing time follows the deliverable count; a project's doesn't.
+  const suggested = f.isEvent ? +(f.deliverables * EST_HOURS_PER_DELIVERABLE).toFixed(2) : '';
+  val('est-hours', estHoursTouched ? e.hours : suggested);
+  document.getElementById('est-hours-why').textContent = f.isEvent
+    ? `${f.deliverables} deliverables ÷ 2`
+    : 'projects vary, so this one is yours to set';
+
+  renderEstExtras(e.extras || []);
+  calcEstimate();
+  show('ov-est');
+}
+
+function renderEstExtras(list){
+  const box = document.getElementById('est-extras');
+  box.innerHTML = list.map((x, i) => `
+    <div class="est-row" data-extra="${i}">
+      <input class="field" placeholder="Travel, rush, extra cuts…" value="${esc(x.label || '')}" data-ef="label" oninput="calcEstimate()">
+      <input class="field" type="number" min="0" step="1" value="${x.qty === undefined ? 1 : esc(x.qty)}" data-ef="qty" oninput="calcEstimate()">
+      <input class="field" type="number" min="0" step="25" value="${x.rate === undefined ? '' : esc(x.rate)}" data-ef="rate" placeholder="rate" oninput="calcEstimate()">
+      <span class="est-amt" data-ef="amt">—</span>
+    </div>`).join('');
+}
+
+function addEstExtra(){
+  const e = estStore();
+  e.extras = readEstExtras().concat([{ label: '', qty: 1, rate: '' }]);
+  renderEstExtras(e.extras);
+  calcEstimate();
+}
+
+function readEstExtras(){
+  return [...document.querySelectorAll('#est-extras .est-row')].map(r => ({
+    label: r.querySelector('[data-ef=label]').value,
+    qty:   r.querySelector('[data-ef=qty]').value,
+    rate:  r.querySelector('[data-ef=rate]').value
+  }));
+}
+
+function calcEstimate(){
+  const num = id => Number(document.getElementById(id).value) || 0;
+  const days = num('est-days'), dayRate = num('est-dayrate');
+  const hours = num('est-hours'), hourRate = num('est-hourrate');
+  const daysAmt = days * dayRate, hoursAmt = hours * hourRate;
+  document.getElementById('est-days-amt').textContent = money(daysAmt);
+  document.getElementById('est-hours-amt').textContent = money(hoursAmt);
+
+  let total = daysAmt + hoursAmt;
+  document.querySelectorAll('#est-extras .est-row').forEach(r => {
+    const q = Number(r.querySelector('[data-ef=qty]').value) || 0;
+    const rt = Number(r.querySelector('[data-ef=rate]').value) || 0;
+    total += q * rt;
+    r.querySelector('[data-ef=amt]').textContent = money(q * rt);
+  });
+  document.getElementById('est-total').textContent = money(total);
+
+  const f = estimateFacts();
+  document.getElementById('est-warn').textContent = f.revised
+    ? `${f.revised} session${f.revised === 1 ? ' went' : 's went'} to a later cut. Billed by deliverable that rework is already covered, so only add a line if it went well beyond a normal revision.`
+    : '';
+
+  // Remembered per project; the rates also become the default for the next job.
+  const e = estStore();
+  e.days = document.getElementById('est-days').value;
+  e.dayRate = document.getElementById('est-dayrate').value;
+  e.hours = document.getElementById('est-hours').value;
+  e.hourRate = document.getElementById('est-hourrate').value;
+  e.extras = readEstExtras();
+  if (e.dayRate)  prefSet('est-dayrate', e.dayRate);
+  if (e.hourRate) prefSet('est-hourrate', e.hourRate);
+  queueSave();
+}
+
+function copyEstimate(btn){
+  const p = proj(), f = estimateFacts();
+  const num = id => Number(document.getElementById(id).value) || 0;
+  const days = num('est-days'), dayRate = num('est-dayrate');
+  const hours = num('est-hours'), hourRate = num('est-hourrate');
+  const out = [p.name, ''];
+  let total = 0;
+  const line = (label, qty, rate) => {
+    const amt = qty * rate; total += amt;
+    out.push(`${label}   ${qty} x ${money(rate)}   ${money(amt)}`);
+  };
+  if (days && dayRate) line('Shoot days', days, dayRate);
+  if (hours && hourRate){
+    line('Editing', hours, hourRate);
+    if (f.isEvent) out.push(`   (${f.deliverables} deliverables at one hour per two)`);
+  }
+  readEstExtras().forEach(x => {
+    const q = Number(x.qty) || 0, r = Number(x.rate) || 0;
+    if (x.label && q && r) line(x.label, q, r);
+  });
+  out.push('');
+  out.push(`Total   ${money(total)}`);
+  out.push('');
+  out.push(`${f.deliverables} deliverable${f.deliverables === 1 ? '' : 's'}` +
+           (f.runtime ? `, ${hhmmss(f.runtime)} of finished video` : '') +
+           (f.days ? `, ${f.days} shoot day${f.days === 1 ? '' : 's'}` : '') + '.');
+
+  copyText(out.join('\n')).then(ok => {
+    if (!ok) return toast('Copy blocked by the browser.', true);
+    btn.textContent = 'Copied'; setTimeout(() => btn.textContent = 'Copy breakdown', 1400);
+  });
 }
 
 /* --------- the delivery email --------- */
