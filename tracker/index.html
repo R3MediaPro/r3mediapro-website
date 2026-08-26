@@ -585,6 +585,29 @@ tr.cutrow td.handle{opacity:.75}
    rather than a fill, so a table of final cuts doesn't read as a wall. */
 .legend .late-k{color:#e0a244}
 /* ---- billing estimate ---- */
+.est-cuts-h{
+  display:flex;justify-content:space-between;align-items:baseline;margin:18px 0 8px;
+  font-size:.68rem;letter-spacing:.11em;text-transform:uppercase;color:var(--muted);font-weight:700;
+}
+.est-cuts-h .linkish{
+  background:none;border:0;padding:0;font:inherit;letter-spacing:0;text-transform:none;
+  font-size:.74rem;color:var(--red-bright);text-decoration:underline;cursor:pointer;
+}
+.est-cuts{
+  display:flex;flex-direction:column;gap:4px;max-height:300px;overflow-y:auto;
+  border:1px solid var(--line);border-radius:7px;padding:8px;
+}
+.est-cut{display:grid;grid-template-columns:1fr 92px 96px;gap:10px;align-items:center}
+.est-cut .t{
+  font-size:.86rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  display:flex;align-items:center;gap:7px;min-width:0;
+}
+.est-cut .t b{flex:none;font-size:.6rem;font-weight:800;letter-spacing:.06em;
+  border:1px solid;border-radius:20px;padding:1px 6px}
+.est-cut .t i{font-style:normal;flex:none;font-size:.7rem;color:var(--muted)}
+.est-cut input{padding:4px 7px;font-size:.82rem}
+.est-cut .a{text-align:right;font-variant-numeric:tabular-nums;font-size:.84rem}
+.est-cut.spare{opacity:.55}
 .est-counts{
   display:flex;flex-wrap:wrap;gap:8px 10px;margin-bottom:18px;
 }
@@ -788,7 +811,7 @@ h4.sec:first-child{margin-top:0}
     </a>
     <div class="wordmark">Video Editing Tracker</div>
     <div class="spacer"></div>
-    <span class="muted" id="buildstamp" style="font-size:.72rem;color:var(--muted);opacity:.5" title="Which build of the tracker you're running">build Aug 26, 9:49 AM MT</span>
+    <span class="muted" id="buildstamp" style="font-size:.72rem;color:var(--muted);opacity:.5" title="Which build of the tracker you're running">build Aug 26, 9:58 AM MT</span>
     <span class="saveping" id="saveping">Saved</span>
     <button class="pill" id="sync-pill" onclick="openSync()" title="Sync settings">Not synced</button>
     <button class="btn ghost sm" onclick="syncNow()" title="Sync now" id="btn-syncnow">&#8635;</button>
@@ -1372,14 +1395,27 @@ h4.sec:first-child{margin-top:0}
           <span class="est-amt" id="est-days-amt">—</span>
         </div>
 
-        <div class="est-row">
+        <div class="est-row" id="est-hours-row">
           <label for="est-hours">Edit hours <span class="est-note" id="est-hours-why"></span></label>
           <input class="field" id="est-hours" type="number" min="0" step="0.5" oninput="estHoursTouched = true; calcEstimate()">
           <input class="field" id="est-hourrate" type="number" min="0" step="5" placeholder="hourly" oninput="calcEstimate()">
           <span class="est-amt" id="est-hours-amt">—</span>
         </div>
 
-        <div class="est-row" id="est-extra-rows"></div>
+        <div class="est-row" id="est-rate-row" style="display:none">
+          <label for="est-hourrate2">Hourly rate <span class="est-note">applies to every cut below</span></label>
+          <span></span>
+          <input class="field" id="est-hourrate2" type="number" min="0" step="5" placeholder="hourly" oninput="calcEstimate()">
+          <span class="est-amt" id="est-cuts-amt">—</span>
+        </div>
+      </div>
+
+      <div id="est-cuts-wrap" style="display:none">
+        <div class="est-cuts-h">
+          <span>Hours per cut</span>
+          <button class="linkish" type="button" onclick="spreadEstHours()">Spread evenly&hellip;</button>
+        </div>
+        <div class="est-cuts" id="est-cuts"></div>
       </div>
 
       <div class="est-extras" id="est-extras"></div>
@@ -4547,6 +4583,22 @@ function hhmmss(secs){
 }
 function estStore(){ return (cfg().estimate = cfg().estimate || {}); }
 
+/** Every cut of every session, newest first within a session, in table order.
+    A project bills per cut because a V2 is real extra work; an event doesn't,
+    because it's priced off the deliverable count. */
+function estimateCuts(){
+  const p = proj();
+  computeOldCuts();
+  const live = p.sessions.filter(x => x.status !== 'deleted' && !x.hidden);
+  const pos = new Map(live.map((x, i) => [x.id, i]));
+  const head = x => oldCuts.has(x.id) ? (cutHead.get(x.id) || x.id) : x.id;
+  return live.slice().sort((a, b) => {
+    const ha = pos.get(head(a)) ?? 1e9, hb = pos.get(head(b)) ?? 1e9;
+    if (ha !== hb) return ha - hb;
+    return (b.version || 1) - (a.version || 1);
+  });
+}
+
 function openEstimate(){
   const f = estimateFacts();
   const e = cfg().estimate || {};
@@ -4572,9 +4624,62 @@ function openEstimate(){
     ? `${f.deliverables} deliverables ÷ 2`
     : 'projects vary, so this one is yours to set';
 
+  // An event bills off the count, so one hours field is the whole story. A
+  // project varies per cut, so each one gets its own line to price.
+  const perCut = !f.isEvent;
+  document.getElementById('est-hours-row').style.display = perCut ? 'none' : '';
+  document.getElementById('est-rate-row').style.display = perCut ? '' : 'none';
+  document.getElementById('est-cuts-wrap').style.display = perCut ? '' : 'none';
+  if (perCut){
+    document.getElementById('est-hourrate2').value =
+      e.hourRate !== undefined ? e.hourRate : prefGet('est-hourrate', '');
+    renderEstCuts(e.lines || {});
+  }
+
   renderEstExtras(e.extras || []);
   calcEstimate();
   show('ov-est');
+}
+
+function renderEstCuts(lines){
+  const box = document.getElementById('est-cuts');
+  box.innerHTML = estimateCuts().map(x => {
+    const st = S_BY_KEY[x.status] || STATUSES[0];
+    const spare = notCounted(x) || x.status === 'undeliverable';
+    return `<div class="est-cut${spare ? ' spare' : ''}" data-cut="${esc(x.id)}">
+      <span class="t" title="${esc(x.title || 'Untitled session')}">
+        <b style="color:${verHue(x.version)};border-color:${verHue(x.version)}66">V${x.version || 1}</b>
+        ${esc(x.title || 'Untitled session')}
+        ${spare ? '<i>not billable</i>' : ''}
+      </span>
+      <input class="field" type="number" min="0" step="0.25" placeholder="hrs"
+             value="${lines[x.id] === undefined ? '' : esc(lines[x.id])}"
+             data-cf="hours" oninput="calcEstimate()">
+      <span class="a" data-cf="amt">—</span>
+    </div>`;
+  }).join('') || '<p class="help" style="margin:0">No sessions yet.</p>';
+}
+
+function readEstCuts(){
+  const out = {};
+  document.querySelectorAll('#est-cuts .est-cut').forEach(r => {
+    const v = r.querySelector('[data-cf=hours]').value;
+    if (v !== '') out[r.dataset.cut] = v;
+  });
+  return out;
+}
+
+/** A starting point when the work really was even across cuts. */
+function spreadEstHours(){
+  const rows = [...document.querySelectorAll('#est-cuts .est-cut')];
+  if (!rows.length) return;
+  const total = prompt(`Total editing hours across all ${rows.length} cuts?`, '');
+  const t = Number(total);
+  if (!t || t < 0) return;
+  const each = Math.round((t / rows.length) * 4) / 4;   // nearest quarter hour
+  rows.forEach(r => { r.querySelector('[data-cf=hours]').value = each; });
+  calcEstimate();
+  toast(`${each} h per cut across ${rows.length}. Adjust any that were heavier.`);
 }
 
 function renderEstExtras(list){
@@ -4605,11 +4710,25 @@ function readEstExtras(){
 
 function calcEstimate(){
   const num = id => Number(document.getElementById(id).value) || 0;
+  const perCut = document.getElementById('est-cuts-wrap').style.display !== 'none';
   const days = num('est-days'), dayRate = num('est-dayrate');
-  const hours = num('est-hours'), hourRate = num('est-hourrate');
-  const daysAmt = days * dayRate, hoursAmt = hours * hourRate;
+  const hourRate = perCut ? num('est-hourrate2') : num('est-hourrate');
+  const daysAmt = days * dayRate;
   document.getElementById('est-days-amt').textContent = money(daysAmt);
-  document.getElementById('est-hours-amt').textContent = money(hoursAmt);
+
+  let hoursAmt = 0, cutHours = 0;
+  if (perCut){
+    document.querySelectorAll('#est-cuts .est-cut').forEach(r => {
+      const h = Number(r.querySelector('[data-cf=hours]').value) || 0;
+      cutHours += h;
+      r.querySelector('[data-cf=amt]').textContent = money(h * hourRate);
+    });
+    hoursAmt = cutHours * hourRate;
+    document.getElementById('est-cuts-amt').textContent = money(hoursAmt);
+  } else {
+    hoursAmt = num('est-hours') * hourRate;
+    document.getElementById('est-hours-amt').textContent = money(hoursAmt);
+  }
 
   let total = daysAmt + hoursAmt;
   document.querySelectorAll('#est-extras .est-row').forEach(r => {
@@ -4621,16 +4740,18 @@ function calcEstimate(){
   document.getElementById('est-total').textContent = money(total);
 
   const f = estimateFacts();
-  document.getElementById('est-warn').textContent = f.revised
-    ? `${f.revised} session${f.revised === 1 ? ' went' : 's went'} to a later cut. Billed by deliverable that rework is already covered, so only add a line if it went well beyond a normal revision.`
-    : '';
+  document.getElementById('est-warn').textContent = perCut
+    ? (cutHours ? `${cutHours} h across ${document.querySelectorAll('#est-cuts .est-cut').length} cuts.` : '')
+    : (f.revised
+        ? `${f.revised} session${f.revised === 1 ? ' went' : 's went'} to a later cut. Billed by deliverable that rework is already covered, so only add a line if it went well beyond a normal revision.`
+        : '');
 
   // Remembered per project; the rates also become the default for the next job.
   const e = estStore();
   e.days = document.getElementById('est-days').value;
   e.dayRate = document.getElementById('est-dayrate').value;
-  e.hours = document.getElementById('est-hours').value;
-  e.hourRate = document.getElementById('est-hourrate').value;
+  e.hourRate = String(hourRate || '');
+  if (perCut) e.lines = readEstCuts(); else e.hours = document.getElementById('est-hours').value;
   e.extras = readEstExtras();
   if (e.dayRate)  prefSet('est-dayrate', e.dayRate);
   if (e.hourRate) prefSet('est-hourrate', e.hourRate);
@@ -4649,9 +4770,20 @@ function copyEstimate(btn){
     out.push(`${label}   ${qty} x ${money(rate)}   ${money(amt)}`);
   };
   if (days && dayRate) line('Shoot days', days, dayRate);
-  if (hours && hourRate){
-    line('Editing', hours, hourRate);
-    if (f.isEvent) out.push(`   (${f.deliverables} deliverables at one hour per two)`);
+  if (f.isEvent){
+    if (hours && hourRate){
+      line('Editing', hours, hourRate);
+      out.push(`   (${f.deliverables} deliverables at one hour per two)`);
+    }
+  } else {
+    const rate = Number(document.getElementById('est-hourrate2').value) || 0;
+    const lines = readEstCuts();
+    const cuts = estimateCuts().filter(x => Number(lines[x.id]) > 0);
+    if (cuts.length && rate){
+      const sum = cuts.reduce((t, x) => t + Number(lines[x.id]), 0);
+      line('Editing', sum, rate);
+      cuts.forEach(x => out.push(`   V${x.version || 1}  ${x.title || 'Untitled session'}   ${lines[x.id]} h`));
+    }
   }
   readEstExtras().forEach(x => {
     const q = Number(x.qty) || 0, r = Number(x.rate) || 0;
