@@ -1080,6 +1080,12 @@ tr.selrow td{background:var(--accent-soft)}
       <input id="sfLink" placeholder="https://…  (Frame.io, Drive, Dropbox, WeTransfer)"
              oninput="onLinkTyped()">
       <div class="hint" id="linkHint">Or paste the whole line from the email — we'll pull the URL out.</div>
+      <div id="sameLinkWrap" style="display:none;margin-top:9px">
+        <button type="button" class="btn sm" onclick="useSameLink()">↺ The link hasn't changed — new cut behind it</button>
+        <div class="hint" style="margin-top:5px">This fills in the link we have on file —
+          <b>check it's still the right one before sending.</b> Nothing is assumed.</div>
+        <div class="hint" id="sameLinkFull" style="margin-top:4px;word-break:break-all;display:none"></div>
+      </div>
     </div>
 
     <div class="or-rule adminOnly" id="handRule" style="display:none"><span>or it arrived another way</span></div>
@@ -1266,8 +1272,8 @@ tr.selrow td{background:var(--accent-soft)}
     </div>
     <div class="field">
       <label>Download filer</label>
-      <div class="hint" style="margin:0 0 8px">A small helper on the Mac renames what you download to
-        <b>VT05_v2 - Title</b> and files it into the show folder. Its installer asks for this token once per Mac.</div>
+      <div class="hint" style="margin:0 0 8px">A small helper on the Mac tags what you download —
+        <b>VT05_v2_original filename</b> — and files it into the show folder. Its installer asks for this token once per Mac.</div>
       <button class="btn sm" onclick="copyFilerToken()">Copy setup token</button>
     </div>
 
@@ -1545,7 +1551,7 @@ tr.selrow td{background:var(--accent-soft)}
 /* Build stamp — bump on each deployment to match the Apps Script deployment
    label. Must equal BUILD in Code.gs; the admin Tools menu shows both so a
    half-paste is obvious. */
-var UI_BUILD = 'V36';
+var UI_BUILD = 'V37';
 
 var S = {
   serverBuild:'',
@@ -3766,6 +3772,7 @@ function openSubmit(id){
   clearFile();
   sfStageHide();
   S.dupOk = false;                    // each new submission gets its own check
+  S.sameLinkResend = false;
   var goBtn = document.getElementById('sfGo');
   goBtn.disabled = false; goBtn.textContent = 'Send it in';
 
@@ -3841,10 +3848,34 @@ function isNewVideoPick(){
 
 function onVideoPick(){
   document.getElementById('sfNewVideo').style.display = isNewVideoPick() ? '' : 'none';
-  updateNextLabel(); syncSubmitEnabled();
+  updateNextLabel(); syncSubmitEnabled(); syncSameLink();
   if(isNewVideoPick()) setTimeout(function(){
     var el=document.getElementById('sfNewTitle'); if(el && !el.value) el.focus();
   },60);
+}
+
+/* "Same link" appears only when the chosen video already has a link on file:
+   review hosts keep one URL while the cut behind it updates, so re-finding
+   the link is busywork. Using it pre-fills the link and waives the duplicate
+   warning — resending IS the intent. Finality still gets asked. */
+function syncSameLink(){
+  var w = document.getElementById('sameLinkWrap'); if(!w) return;
+  var v = !isNewVideoPick() && byId(document.getElementById('sfVideo').value);
+  var ok = v && v.link && !S.pendingFile;
+  w.style.display = ok ? '' : 'none';
+  var f = document.getElementById('sameLinkFull');
+  if(f){ f.style.display = ok ? '' : 'none'; f.textContent = ok ? ('On file: ' + v.link) : ''; }
+}
+function useSameLink(){
+  var v = byId(document.getElementById('sfVideo').value);
+  if(!v || !v.link) return;
+  document.getElementById('sfLink').value = v.link;
+  S.dupOk = true;                     // deliberate resend — skip the "already sent" stop
+  S.sameLinkResend = true;            // stamps the version note, so the team never assumes either
+  onLinkTyped(); syncSendSurfaces();
+  document.getElementById('sfLink').focus();
+  toast('Check the link is still right, then: final or newer coming?','ok');
+  if(!S.sfFinality) paintFinality(true);
 }
 
 /** Greys out the send button until a video is actually chosen. */
@@ -3859,6 +3890,7 @@ function syncSubmitEnabled(){
 /* One surface, two routes: a chosen file dims the link, a typed link dims
    the drop zone. Whichever the sender reaches for is the one that runs. */
 function syncSendSurfaces(){
+  syncSameLink();
   var hasFile = !!S.pendingFile;
   var hasLink = !!(document.getElementById('sfLink').value||'').trim();
   document.getElementById('linkField').classList.toggle('dimmed', hasFile);
@@ -4096,7 +4128,11 @@ function sendAgainst(videoId, who, note){
     var link = document.getElementById('sfLink').value.trim();
     if(!link) return toast('Drop the video file in, or paste a link.','err');
     sfBusy('Sending your link…', { hint:'Just a moment.' });
-    api('submitVersion', {videoId:videoId, link:link, note:note, finality:S.sfFinality||'',
+    var vNow = byId(videoId);
+    var noteOut = (S.sameLinkResend && vNow && link===vNow.link)
+      ? (note ? note + ' · same link — updated behind it' : 'Same link — updated behind it')
+      : note;
+    api('submitVersion', {videoId:videoId, link:link, note:noteOut, finality:S.sfFinality||'',
         submitter:who.name, submitterEmail:who.email, submitterAgency:who.agency,
         clientTitle:document.getElementById('sfClientTitle').value.trim()}, S.token, S.vtok, S.eventId)
       .then(function(r){
