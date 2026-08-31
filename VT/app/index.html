@@ -1321,6 +1321,10 @@ tr.selrow td{background:var(--accent-soft)}
         <option value="12">Every 12 hours</option>
         <option value="24">Once a day, 8am</option>
       </select>
+      <label class="pk" style="margin:8px 0 6px">
+        <input type="checkbox" id="cfgDigestMine" onchange="setDigestScope(this.checked)">
+        <span>Include my own changes too</span>
+      </label>
       <div class="hint">A summary of new cuts, changes and messages since the last email — sent only when
         something actually changed, to the help address. One-time setup in the Apps Script editor:
         <b>Triggers › Add › digestTick › time-driven › every hour</b>. After that, this picker is the only control.</div>
@@ -1552,7 +1556,7 @@ tr.selrow td{background:var(--accent-soft)}
 /* Build stamp — bump on each deployment to match the Apps Script deployment
    label. Must equal BUILD in Code.gs; the admin Tools menu shows both so a
    half-paste is obvious. */
-var UI_BUILD = 'V38';
+var UI_BUILD = 'V39';
 
 var S = {
   serverBuild:'',
@@ -1569,7 +1573,7 @@ var S = {
   submitterAgency: localStorage.getItem('vt_agency') || '',
   reorder:false, orderDraft:null, dragFrom:null, hideCut:false,
   viewAs:'', meReal:{role:'client',email:''},
-  lastSeen:Number(localStorage.getItem('vt_lastseen')||0), fNew:false, fUnnumbered:false, fShow:'',
+  seen:{all:0,marks:{}}, fNew:false, fUnnumbered:false, fShow:'',
   view:'table', q:'', fStatus:[], fUploader:'', fSection:'',
   // 'order' is the running order set on Show Day — the order the rundown plays in
   sort:{key:'order',dir:1}, hidePlayed:false, closedSections:{},
@@ -1731,6 +1735,7 @@ function applyBootstrap(d){
     S.noteRequired=d.noteRequired||['Issue','Deleted'];
     S.config=d.config||{}; applyIdentity(d.me);
     S.sheetUrl=d.sheetUrl||'#'; S.appUrl=d.appUrl||''; S.serverBuild=d.serverBuild||'';
+    if(d.seen) S.seen = d.seen;
 
     // The token stopped being admin (PIN changed, say) — drop it, and drop the
     // cached admin payload with it rather than leaving internal notes on disk.
@@ -1838,6 +1843,7 @@ function pullNow(manual){
     if(d.config&&d.config.eventId) S.eventId=d.config.eventId;
     if(d.serverBuild) S.serverBuild=d.serverBuild;
     S.events=d.events||S.events;
+    if(d.seen) S.seen = d.seen;          // another device may have cleared tags
     if(S.config.theme!==S.theme) applyTheme(S.config.theme);
     writeCache(d);                       // keep the instant-open copy current
     applyEventHeader();
@@ -2048,9 +2054,11 @@ function renderStats(){
   if(S.me.role!=='admin'){
     h += stat(t.total,'Total videos', !S.fStatus.length && !S.fUploader && !S.fSection, "clearFilters()");
     h += stat(t.missing,'Missing', S.fStatus.indexOf('Pending')>=0, "toggleGroup('missing')", t.missing?'alarm':'');
-    h += stat(Math.max(0,t.have-t.coming),'Received', S.fStatus.indexOf('Uploaded')>=0, "toggleGroup('received')", 'good');
+    // Received means "we have a cut", whether or not a newer one is promised.
+    // The per-video flags still say which are settled; the summary answers the
+    // only question the sender's summary should: how many are in.
+    h += stat(t.have,'Received', S.fStatus.indexOf('Uploaded')>=0, "toggleGroup('received')", 'good');
     if(t.final)  h += stat(t.final,'Marked final', S.fStatus.length===1&&S.fStatus[0]==='Final', "toggleGroup('final')", 'good');
-    if(t.coming) h += stat(t.coming,'New version coming', S.fStatus.indexOf('New Version Coming')>=0, "toggleGroup('coming')");
     h += progressHtml(t);
     document.getElementById('stats').innerHTML = h;
     document.getElementById('cntBoard').textContent = t.total;
@@ -2082,8 +2090,7 @@ function progressHtml(t){
     ? '<span><i style="background:var(--green)"></i>'+t.ready+' in show</span>' +
       '<span><i style="background:var(--blue)"></i>'+Math.max(0,t.have-t.ready)+' in, not show-ready</span>' +
       '<span><i style="background:#1e2836"></i>'+t.missing+' nothing yet</span>'
-    : '<span><i style="background:var(--green)"></i>'+Math.max(0,t.have-t.coming)+' received</span>' +
-      (t.coming ? '<span><i style="background:var(--orange)"></i>'+t.coming+' new version coming</span>' : '') +
+    : '<span><i style="background:var(--green)"></i>'+t.have+' received</span>' +
       '<span><i style="background:#1e2836"></i>'+t.missing+' missing</span>';
   return '<div class="progress-wrap">' +
          '<div class="progress-lbl"><span><b style="color:var(--txt)">'+t.have+'</b> of <b style="color:var(--txt)">'+
@@ -2459,28 +2466,50 @@ function newestSubmission(v){
   (v.history||[]).forEach(function(r){ if(r.time > t) t = r.time; });
   return t;
 }
+/* NEW is "arrived since the team last looked" — and the team, not this
+   browser, so the state lives on the server and every device agrees. `all`
+   is the watermark from Mark all as seen; `marks` dismisses single videos and
+   records WHICH cut was dismissed, so a later version is new again. */
 function videoIsNew(v){
-  if(S.me.role!=='admin' || !S.lastSeen) return false;
-  return newestSubmission(v) > S.lastSeen;
+  if(S.me.role!=='admin') return false;
+  var base = (S.seen && S.seen.all) || 0;
+  if(!base) return false;
+  var t = newestSubmission(v);
+  if(t <= base) return false;
+  var mark = S.seen.marks && S.seen.marks[v.id];
+  return !(mark && mark >= t);
+}
+function markSelectedSeen(){
+  var ids = Object.keys(SEL).filter(function(id){ var v=byId(id); return v && videoIsNew(v); });
+  if(!ids.length) return toast('Nothing new in that selection.','err');
+  var before = JSON.stringify(S.seen);
+  var now = Date.now();
+  ids.forEach(function(id){                       // paint immediately, reconcile after
+    var v = byId(id); S.seen.marks[id] = Math.max(newestSubmission(v), now); });
+  renderAll(); clearSel();
+  api('markVideosSeen', ids, S.token, S.eventId).then(function(r){
+    if(r && r.seen){ S.seen = r.seen; renderAll(); }
+    toast('Marked '+ids.length+' as seen — on every device.','ok');
+  }).catch(function(e){ S.seen = JSON.parse(before); renderAll(); err(e); });
 }
 function newCount(){
   return S.videos.filter(videoIsNew).length;
 }
 function markAllSeen(){
-  S.lastSeen = Date.now();
-  try{ localStorage.setItem('vt_lastseen', String(S.lastSeen)); }catch(e){}
+  var before = JSON.stringify(S.seen);
+  S.seen = { all: Date.now(), marks: {} };
   S.fNew = false;
   renderAll();
-  toast('Marked everything as seen.','ok');
+  api('markAllVideosSeen', S.token, S.eventId).then(function(r){
+    if(r && r.seen){ S.seen = r.seen; renderAll(); }
+    toast('Marked everything as seen — on every device.','ok');
+  }).catch(function(e){ S.seen = JSON.parse(before); renderAll(); err(e); });
+  return;
 }
 /** First run has no baseline, so start the clock now rather than flagging
     all 100 videos as new on day one. */
-function initLastSeen(){
-  if(!S.lastSeen){
-    S.lastSeen = Date.now();
-    try{ localStorage.setItem('vt_lastseen', String(S.lastSeen)); }catch(e){}
-  }
-}
+/* The server owns the watermark now; nothing to seed locally. */
+function initLastSeen(){}
 
 /* =========================================================================
    STATUS PILLS  —  click to change, anywhere the pill appears
@@ -2674,12 +2703,17 @@ function currentCut(v){
      (Frame.io, Vimeo, WeTransfer, anything else) — the best we can do is open
      their page so you use their download control. */
 function downloadPlan(fileId, link){
+  /* Drive's uc?export=download endpoint answers 403 for files that are not
+     publicly shared — which ours deliberately are not (DRIVE_SHARE=private).
+     Opening the file's own Drive page always works for someone with access,
+     and Drive's own download button takes it from there. One extra click,
+     versus a Google error page. */
   if(fileId)
-    return { mode:'download', url:'https://drive.google.com/uc?export=download&id='+encodeURIComponent(fileId) };
+    return { mode:'open', url:'https://drive.google.com/file/d/'+encodeURIComponent(fileId)+'/view' };
   var u = String(link || '');
   var m = u.match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?[^]*?id=)([-\w]{10,})/)
        || (/drive\.google\.com/.test(u) ? u.match(/[?&]id=([-\w]{10,})/) : null);
-  if(m) return { mode:'download', url:'https://drive.google.com/uc?export=download&id='+m[1] };
+  if(m) return { mode:'open', url:'https://drive.google.com/file/d/'+m[1]+'/view' };
   if(/dropbox\.com/.test(u)){
     var d = u.replace(/([?&])dl=[01]/,'$1').replace(/[?&]$/,'');
     d += (d.indexOf('?')>=0 ? '&' : '?') + 'dl=1';
@@ -3224,7 +3258,17 @@ function paintPush(){
                                : 'Not set up yet — paste the two keys from pushover.net and Save.';
 }
 
+function setDigestScope(includeMine){
+  var was = S.config.digestScope;
+  S.config.digestScope = includeMine ? 'all' : 'senders';
+  api('setDigestScope', S.config.digestScope, S.token, S.eventId).then(function(){
+    toast(includeMine ? 'Digest includes your own changes.'
+                      : 'Digest reports only what senders did.','ok');
+  }).catch(function(e){ S.config.digestScope = was; paintDigest(); err(e); });
+}
 function paintDigest(){
+  var m = document.getElementById('cfgDigestMine');
+  if(m) m.checked = String(S.config.digestScope||'senders') === 'all';
   var el = document.getElementById('cfgDigest'); if(!el) return;
   el.value = String(S.config.digestHours||0);
 }
@@ -4664,6 +4708,8 @@ function paintSelection(){
   bar.innerHTML =
     '<span class="n">'+n+'</span><span class="lbl">video'+(n===1?'':'s')+' selected</span>' +
     '<button class="btn sm ghost" onclick="clearSel()">Deselect</button>' +
+    (Object.keys(SEL).filter(function(id){ var v=byId(id); return v && videoIsNew(v); }).length
+      ? '<button class="btn sm" onclick="markSelectedSeen()">Mark as seen</button>' : '') +
     '<button class="btn sm" onclick="openNumbering()">Number</button>' +
     '<button class="btn sm ghost" onclick="clearNumbering()">Clear numbers</button>' +
     '<button class="btn sm danger" onclick="deleteSelected()">Delete selected</button>';
@@ -5272,6 +5318,7 @@ function doPin(){
     return api('getBootstrap', S.token, S.vtok, S.eventId).then(function(d){
       S.viewAs=''; applyIdentity(d.me); S.videos=d.videos; S.sections=d.sections; S.config=d.config;
       S.submitters=d.submitters||S.submitters; S.messages=d.messages||[]; S.problems=d.problems||[]; S.pushReady=!!d.pushReady; S.pushEvents=String(d.pushEvents||'');
+      if(d.seen) S.seen=d.seen;          // this path applies the payload inline, not via applyBootstrap
       S.events=d.events||[]; if(d.config&&d.config.eventId) S.eventId=d.config.eventId;
       S.serverBuild=d.serverBuild||'';
       initLastSeen();
