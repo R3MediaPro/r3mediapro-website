@@ -1426,6 +1426,7 @@ tr.selrow td{background:var(--accent-soft)}
     </div>
   </div>
   <div class="m-foot">
+    <button class="btn danger" id="neDelete" style="display:none;margin-right:auto" onclick="askDeleteEvent()">Delete event</button>
     <button class="btn" onclick="closeAll()">Cancel</button>
     <button class="btn primary" id="neSave" onclick="commitEvent()">Create event</button>
   </div>
@@ -1551,7 +1552,7 @@ tr.selrow td{background:var(--accent-soft)}
 /* Build stamp — bump on each deployment to match the Apps Script deployment
    label. Must equal BUILD in Code.gs; the admin Tools menu shows both so a
    half-paste is obvious. */
-var UI_BUILD = 'V37';
+var UI_BUILD = 'V38';
 
 var S = {
   serverBuild:'',
@@ -5070,6 +5071,7 @@ var EDIT_EVENT_ID = null;   // null = creating; an id = editing that event
 function openNewEvent(){
   EDIT_EVENT_ID = null;
   document.getElementById('neTitle').textContent = 'New event';
+  var d = document.getElementById('neDelete'); if(d) d.style.display='none';
   document.getElementById('neSave').textContent = 'Create event';
   document.getElementById('neNote').textContent =
     'Adds a fresh event alongside the ones you already have — nothing is archived '
@@ -5097,8 +5099,34 @@ function openEditEvent(id){
   document.getElementById('nePassword').value = e.code || '';
   document.getElementById('neTheme').value = e.theme || 'r3';
   document.getElementById('neTz').value = e.timezone || S.config.timezone || 'America/Chicago';
+  // Deleting takes the event's tabs with it, so the button only exists where
+  // it is safe: not the last event, and not the one everything falls back to.
+  var del = document.getElementById('neDelete');
+  del.style.display = ((S.events||[]).length > 1 && !e.active) ? '' : 'none';
+  del.title = e.active ? 'Make another event active first' : '';
   show('mNewEvent');
   setTimeout(function(){ document.getElementById('neName').focus(); }, 120);
+}
+
+/* Deleting an event removes its videos, versions, activity and messages with
+   it. Typing the name is the confirmation — a two-tap dialog is too easy to
+   fly through for something this final. */
+function askDeleteEvent(){
+  var e = (S.events||[]).filter(function(x){ return x.id===EDIT_EVENT_ID; })[0];
+  if(!e) return;
+  var typed = window.prompt(
+    'Delete "' + e.name + '" and everything in it — its videos, versions, activity and messages?\n\n' +
+    'This cannot be undone from here (the Sheet\'s version history is the only way back).\n\n' +
+    'Type the event name exactly to confirm:', '');
+  if(typed===null) return;
+  if(typed.trim().toLowerCase() !== String(e.name||'').trim().toLowerCase())
+    return toast('That name did not match — nothing was deleted.','err');
+  api('deleteEvent', EDIT_EVENT_ID, typed, S.token).then(function(r){
+    S.events = r.events || [];
+    closeAll();
+    toast('Deleted "'+r.deleted+'"'+(r.tabs&&r.tabs.length?' and '+r.tabs.length+' tabs.':'.'),'ok');
+    renderEventSwitcher && renderEventSwitcher();
+  }).catch(err);
 }
 
 function commitEvent(){
