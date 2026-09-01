@@ -289,6 +289,20 @@ td.t-due{white-space:nowrap;font-size:12.5px;color:var(--txt-2)}
 .pk{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--txt-2);cursor:pointer}
 .pk input{width:15px;height:15px;accent-color:var(--accent);cursor:pointer;margin:0}
 .cstwrap{display:inline-flex;gap:7px;align-items:center;flex-wrap:wrap}
+.linktray{position:fixed;right:16px;bottom:16px;z-index:190;width:min(360px,calc(100vw - 24px));
+  background:var(--panel);border:1px solid var(--line);border-radius:13px;box-shadow:var(--shadow);
+  display:none;flex-direction:column;overflow:hidden}
+.linktray.on{display:flex;animation:pop2 .14s ease}
+.lt-head{display:flex;align-items:center;gap:8px;padding:9px 12px;font-size:12.5px;
+  border-bottom:1px solid var(--line-soft)}
+.lt-head b{flex:1;font-weight:650}
+.lt-row{display:flex;align-items:center;gap:7px;padding:8px 12px;border-bottom:1px solid var(--line-soft)}
+.lt-row:last-child{border-bottom:0}
+.lt-main{flex:1;min-width:0}
+.lt-t{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lt-u{font-size:11px;color:var(--txt-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:640px){ .linktray{left:12px;right:12px;bottom:12px;width:auto} }
+@media print{ .linktray{display:none !important} }
 /* The finality choice: two real buttons, not a quiet segmented strip — this
    is the one required decision in the form, so it should look pressable and
    the picked one should look picked. Dot echoes the status flags in the list. */
@@ -1556,7 +1570,7 @@ tr.selrow td{background:var(--accent-soft)}
 /* Build stamp — bump on each deployment to match the Apps Script deployment
    label. Must equal BUILD in Code.gs; the admin Tools menu shows both so a
    half-paste is obvious. */
-var UI_BUILD = 'V39';
+var UI_BUILD = 'V40';
 
 var S = {
   serverBuild:'',
@@ -2737,7 +2751,7 @@ function downloadAndMark(id){
   var v = byId(id); if(!v || !v.link) return;
   var c = currentCut(v);
   var plan = downloadPlan(c.fileId, c.link);
-  window.open(plan.url, '_blank');
+  openExternal(plan.url, (v.number?v.number+' ':'')+(v.title||'video'), plan.mode);
   // Tell the filer on the Mac what this download IS, so the file that lands
   // in ~/Downloads can be renamed and filed without guessing. Best-effort.
   apiQuiet('noteDownload', id, S.token, S.eventId).catch(function(){});
@@ -2815,7 +2829,7 @@ function draftIssueEmail(videoId, status, note){
         'Could you send a new version when you get a chance? Straight into the tracker:\n' +
         (S.appUrl || window.location.href.split('?')[0]) + '\n\n') +
     'Thanks,\nThe video team\n';
-  window.open('mailto:' + encodeURIComponent(to) +
+  openMail('mailto:' + encodeURIComponent(to) +
               '?subject=' + encodeURIComponent(subject) +
               '&body=' + encodeURIComponent(body), '_blank');
   toast('Flagged as '+status+' · drafting email to '+to, 'ok');
@@ -3082,6 +3096,97 @@ function fmtDue(d){
    List cell and left Open/Copy live on Board cards, Show Day rows and the
    History drawer — three ways round the switch. */
 function clientCanOpen(){ return S.me.role==='admin' || S.config.allowClientLinks !== false; }
+
+/* ===== links & downloads, without a swarm of windows =====================
+   Added to the Dock as a Safari web app, every window.open leaves the app and
+   lands in Safari. So: a real file URL is fetched by a hidden iframe, which
+   downloads in place and opens nothing; anything that must be *viewed* goes
+   to a tray instead of opening itself, and leaves the app only when tapped.
+   A review page cannot be shown inside the app — Frame.io, Drive and Vimeo
+   all refuse to be framed — so the honest options are copy or open. */
+function isStandalone(){
+  try{
+    return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+        || navigator.standalone === true;
+  }catch(e){ return false; }
+}
+function silentDownload(url){
+  var f = document.getElementById('dlFrame');
+  if(!f){
+    f = document.createElement('iframe');
+    f.id='dlFrame'; f.style.display='none'; f.setAttribute('aria-hidden','true');
+    document.body.appendChild(f);
+  }
+  f.src = url;
+}
+var TRAY = [];
+function trayAdd(it){
+  it.at = Date.now();
+  TRAY = [it].concat(TRAY.filter(function(x){ return x.url!==it.url; })).slice(0,6);
+  renderTray(); 
+}
+function trayClear(){ TRAY=[]; renderTray(); }
+function trayOpen(i){
+  var it = TRAY[i]; if(!it) return;
+  if(it.kind==='download'){ silentDownload(it.url); toast('Downloading again…','ok'); return; }
+  window.open(it.url,'_blank');            // deliberate: a tap, not an ambush
+}
+function trayCopy(i){
+  var it = TRAY[i]; if(!it) return;
+  function done(){ toast('Link copied.','ok'); }
+  if(navigator.clipboard && navigator.clipboard.writeText)
+    navigator.clipboard.writeText(it.url).then(done, function(){ fallbackCopy(it.url); done(); });
+  else { fallbackCopy(it.url); done(); }
+}
+function renderTray(){
+  var el = document.getElementById('linkTray');
+  if(!el){
+    el = document.createElement('div');
+    el.id='linkTray'; el.className='linktray';
+    document.body.appendChild(el);
+  }
+  if(!TRAY.length){ el.classList.remove('on'); el.innerHTML=''; return; }
+  el.innerHTML =
+    '<div class="lt-head"><b>Links &amp; downloads</b>' +
+    '<button class="btn sm ghost" onclick="trayClear()">Clear</button></div>' +
+    TRAY.map(function(it,i){
+      return '<div class="lt-row">' +
+             '<div class="lt-main"><div class="lt-t">'+esc(it.title||'Link')+'</div>' +
+             '<div class="lt-u">'+esc(it.kind==='download' ? 'Downloading — check your Downloads folder' : shortUrl(it.url))+'</div></div>' +
+             '<button class="btn sm ghost" onclick="trayCopy('+i+')">Copy</button>' +
+             '<button class="btn sm" onclick="trayOpen('+i+')">'+(it.kind==='download'?'Again':'Open')+'</button>' +
+             '</div>';
+    }).join('');
+  el.classList.add('on');
+}
+/* One door for everything that used to call window.open. */
+function openExternal(url, title, kind){
+  if(kind==='download'){ silentDownload(url); trayAdd({url:url,title:title,kind:'download'}); return; }
+  if(!isStandalone()){ window.open(url,'_blank'); return; }
+  trayAdd({url:url,title:title,kind:'link'});
+  toast('Added to the tray — tap Open when you want it.','ok');
+}
+/* Every external anchor in the app carries target="_blank" — in the Dock app
+   each one is another Safari window. One delegated listener re-routes them
+   all to the tray; in a normal browser tab nothing changes. */
+document.addEventListener('click', function(ev){
+  if(!isStandalone()) return;
+  var a = ev.target && ev.target.closest && ev.target.closest('a[target="_blank"]');
+  if(!a) return;
+  var href = a.getAttribute('href') || '';
+  if(!/^https?:/i.test(href)) return;              // mailto and # are not ours
+  ev.preventDefault(); ev.stopPropagation();
+  var label = (a.textContent || '').trim();
+  var row = a.closest && a.closest('tr,.card,.sd-row');
+  var t = row && row.querySelector('.t-title,.c-title,.sd-title');
+  openExternal(href, (t && t.textContent.trim()) || label || 'Link', 'link');
+}, true);
+
+function openMail(href){
+  if(!isStandalone()){ window.open(href,'_blank'); return; }
+  var a=document.createElement('a'); a.href=href; a.style.display='none';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
 
 var PROBLEM_LABEL = { upload:'Upload failed', link:'Link could not be sent', submit:'Submission failed',
   details:'Details could not be saved', 'upload-stalled':'Upload never finished',
@@ -4628,7 +4733,7 @@ function openHelp(){
     'View: ' + S.view + '\n' +
     (S.submitter ? 'From: ' + S.submitter + (S.submitterEmail ? ' <'+S.submitterEmail+'>' : '') + '\n' : '') +
     'Videos: ' + S.videos.length + '\n';
-  window.open('mailto:' + encodeURIComponent(to) +
+  openMail('mailto:' + encodeURIComponent(to) +
               '?subject=' + encodeURIComponent(subject) +
               '&body=' + encodeURIComponent(body), '_blank');
   toast('Opening an email to ' + to + '…', 'ok');
