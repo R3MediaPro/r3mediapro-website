@@ -19,6 +19,15 @@
   --accent:#c8933f; --accent-soft:rgba(200,147,63,.14);
   --red:#ef4444; --green:#34d399; --blue:#38bdf8; --purple:#a78bfa; --orange:#fb923c;
   --radius:14px; --shadow:0 10px 30px rgba(0,0,0,.45);
+  /* Surfaces that used to be literals. A light palette has to reach these or
+     the page ends up dark bars on a white page. */
+  --track:#1e2836;            /* progress and meter grooves */
+  --on-accent:#0b0f14;        /* text sitting ON the accent colour */
+  --scrim:rgba(3,6,10,.72);
+  --thumb:#233046; --thumb-hover:#2e3d57;
+  --line-hover:#2f3f59; --line-hover-2:#3a4a66;
+  --hairline:rgba(255,255,255,.08);
+  --header-bg:rgba(11,15,20,.85);
   --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -42,18 +51,18 @@ button{cursor:pointer;border:none;background:none}
 a{color:var(--accent);text-decoration:none}
 ::-webkit-scrollbar{width:10px;height:10px}
 ::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:#233046;border-radius:8px;border:2px solid var(--bg)}
-::-webkit-scrollbar-thumb:hover{background:#2e3d57}
+::-webkit-scrollbar-thumb{background:var(--thumb);border-radius:8px;border:2px solid var(--bg)}
+::-webkit-scrollbar-thumb:hover{background:var(--thumb-hover)}
 
 /* ============================  HEADER  ============================ */
-header{position:sticky;top:0;z-index:40;background:rgba(11,15,20,.85);
+header{position:sticky;top:0;z-index:40;background:var(--header-bg);
   backdrop-filter:blur(14px);border-bottom:1px solid var(--line-soft)}
 .hdr-top{display:flex;align-items:center;gap:14px;padding:14px 22px 12px;flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:12px;min-width:0}
 .mark{width:38px;height:38px;border-radius:11px;flex:0 0 auto;
   background:linear-gradient(145deg,var(--accent),var(--accent-deep,#8c611f));display:grid;place-items:center;
   box-shadow:0 4px 16px rgba(200,147,63,.3)}
-.mark svg{width:20px;height:20px;fill:#0b0f14}
+.mark svg{width:20px;height:20px;fill:var(--on-accent)}
 .brand h1{margin:0;font-size:16px;font-weight:650;letter-spacing:-.01em;white-space:nowrap}
 .brand .sub{font-size:11.5px;color:var(--txt-3);letter-spacing:.06em;text-transform:uppercase}
 .hdr-spacer{flex:1}
@@ -71,8 +80,8 @@ header{position:sticky;top:0;z-index:40;background:rgba(11,15,20,.85);
 .btn{display:inline-flex;align-items:center;gap:7px;padding:9px 14px;border-radius:10px;
   font-size:13px;font-weight:550;background:var(--panel);border:1px solid var(--line);
   color:var(--txt);transition:.14s;white-space:nowrap}
-.btn:hover{background:var(--panel-2);border-color:#2f3f59}
-.btn.primary{background:var(--accent);border-color:var(--accent);color:#14100a;font-weight:650}
+.btn:hover{background:var(--panel-2);border-color:var(--line-hover)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:650}
 .btn.primary:hover{filter:brightness(1.08)}
 .btn.ghost{background:transparent;border-color:transparent;color:var(--txt-2)}
 .btn.ghost:hover{background:var(--panel);color:var(--txt)}
@@ -97,7 +106,7 @@ header{position:sticky;top:0;z-index:40;background:rgba(11,15,20,.85);
   border-radius:12px;padding:10px 14px;display:flex;flex-direction:column;justify-content:center}
 .progress-lbl{display:flex;justify-content:space-between;font-size:11.5px;color:var(--txt-2);
   margin-bottom:7px;gap:10px}
-.progress{height:8px;border-radius:99px;background:#1e2836;overflow:hidden;display:flex}
+.progress{height:8px;border-radius:99px;background:var(--track);overflow:hidden;display:flex}
 .progress i{display:block;height:100%;transition:width .4s ease}
 .legend{display:flex;gap:12px;font-size:11px;color:var(--txt-3);margin-top:7px;flex-wrap:wrap}
 .legend span{display:inline-flex;align-items:center;gap:5px}
@@ -119,7 +128,7 @@ header{position:sticky;top:0;z-index:40;background:rgba(11,15,20,.85);
 .chip{padding:5px 12px;border-radius:99px;font-size:12.5px;font-weight:550;
   background:var(--panel);border:1px solid var(--line);color:var(--txt-2);
   display:inline-flex;align-items:center;gap:6px;transition:.14s}
-.chip:hover{border-color:#2f3f59;color:var(--txt)}
+.chip:hover{border-color:var(--line-hover);color:var(--txt)}
 .chip.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
 .chip .dot{width:7px;height:7px;border-radius:99px;background:currentColor}
 .filters select{padding:6px 10px;border-radius:9px;background:var(--panel);
@@ -147,7 +156,7 @@ main{padding:20px 22px 90px}
 .scount{text-align:right;line-height:1.15}
 .scount b{font-size:16px;font-weight:700;display:block}
 .scount span{font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--txt-3)}
-.sect-bar{width:110px;height:6px;border-radius:99px;background:#1e2836;overflow:hidden;display:flex;flex:0 0 auto}
+.sect-bar{width:110px;height:6px;border-radius:99px;background:var(--track);overflow:hidden;display:flex;flex:0 0 auto}
 .sect-bar i{height:100%}
 @media(max-width:700px){.sect-bar{display:none}}
 
@@ -188,7 +197,7 @@ main{padding:20px 22px 90px}
 .vbadge.none{color:var(--txt-3);background:var(--panel-2)}
 .c-title{font-size:14.5px;font-weight:600;line-height:1.35;letter-spacing:-.01em;word-break:break-word}
 .newtag{display:inline-block;font-size:9.5px;font-weight:800;letter-spacing:.1em;
-  background:var(--accent);color:#14100a;padding:2px 6px;border-radius:5px;
+  background:var(--accent);color:var(--on-accent);padding:2px 6px;border-radius:5px;
   vertical-align:middle;flex:0 0 auto;animation:newpulse 1.5s ease-in-out infinite}
 @keyframes newpulse{
   0%,100%{box-shadow:0 0 0 0 rgba(246,168,33,.0);opacity:.9}
@@ -314,7 +323,7 @@ td.t-due{white-space:nowrap;font-size:12.5px;color:var(--txt-2)}
   cursor:pointer;transition:.13s}
 .finality button:before{content:'';width:9px;height:9px;border-radius:99px;
   background:var(--txt-3);opacity:.45;flex:0 0 auto;transition:.13s}
-.finality button:hover{border-color:#3a4a66;color:var(--txt);transform:translateY(-1px)}
+.finality button:hover{border-color:var(--line-hover-2);color:var(--txt);transform:translateY(-1px)}
 #finComing.on{background:rgba(251,146,60,.14);border-color:#fb923c;color:#fdba74;
   box-shadow:0 0 0 3px rgba(251,146,60,.13)}
 #finComing.on:before{background:#fb923c;opacity:1;box-shadow:0 0 7px #fb923c}
@@ -346,7 +355,7 @@ td.t-link a{display:block;overflow:hidden;text-overflow:ellipsis;white-space:now
   place-items:center;flex:0 0 auto;transition:.14s}
 .playbox:hover{border-color:var(--accent)}
 .playbox.on{background:var(--green);border-color:var(--green)}
-.playbox svg{width:12px;height:12px;fill:#0b0f14;opacity:0}
+.playbox svg{width:12px;height:12px;fill:var(--on-accent);opacity:0}
 .playbox.on svg{opacity:1}
 
 .sd-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px}
@@ -368,7 +377,7 @@ td.t-link a{display:block;overflow:hidden;text-overflow:ellipsis;white-space:now
 .ohead .ospacer{flex:1}
 .ostat{text-align:right;font-size:11.5px;color:var(--txt-3);white-space:nowrap}
 .ostat b{color:var(--txt);font-size:15px;font-weight:700}
-.obar{height:4px;background:#1e2836;display:flex}
+.obar{height:4px;background:var(--track);display:flex}
 .obar i{height:100%}
 .olist{border-top:1px solid var(--line-soft);display:none}
 .ocard.open .olist{display:block}
@@ -384,7 +393,7 @@ td.t-link a{display:block;overflow:hidden;text-overflow:ellipsis;white-space:now
 .empty p{margin:0 auto 18px;font-size:13px;max-width:420px}
 
 /* ============================  MODAL / DRAWER  ============================ */
-.scrim{position:fixed;inset:0;background:rgba(3,6,10,.72);backdrop-filter:blur(3px);z-index:90;display:none}
+.scrim{position:fixed;inset:0;background:var(--scrim);backdrop-filter:blur(3px);z-index:90;display:none}
 .scrim.on{display:block;animation:fade .16s ease}
 @keyframes fade{from{opacity:0}to{opacity:1}}
 .modal{position:fixed;z-index:100;left:50%;top:50%;transform:translate(-50%,-50%);
@@ -460,7 +469,7 @@ td.t-link a{display:block;overflow:hidden;text-overflow:ellipsis;white-space:now
 .filecard .fmain{flex:1;min-width:0}
 .filecard .fname{font-weight:600;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .filecard .fmeta{font-size:11.5px;color:var(--txt-3);margin-top:2px}
-.upbar{height:7px;border-radius:99px;background:#1e2836;overflow:hidden;margin-top:11px}
+.upbar{height:7px;border-radius:99px;background:var(--track);overflow:hidden;margin-top:11px}
 .upbar i{display:block;height:100%;background:var(--accent);width:0;transition:width .25s ease}
 .uptxt{font-size:11.5px;color:var(--txt-2);margin-top:7px;display:flex;justify-content:space-between;gap:10px}
 
@@ -553,7 +562,7 @@ td.t-link a{display:block;overflow:hidden;text-overflow:ellipsis;white-space:now
 #boot{position:fixed;inset:0;display:grid;place-items:center;background:var(--bg);z-index:300}
 .bootbox{display:flex;flex-direction:column;align-items:center;gap:14px;padding:20px;text-align:center}
 .bootmsg{font-size:14px;font-weight:600;color:var(--txt-2)}
-.bootbar{width:min(240px,70vw);height:6px;border-radius:99px;background:#1e2836;overflow:hidden}
+.bootbar{width:min(240px,70vw);height:6px;border-radius:99px;background:var(--track);overflow:hidden}
 .bootbar i{display:block;height:100%;width:0;background:var(--accent);border-radius:99px;transition:width .3s ease}
 .boothint{font-size:11.5px;color:var(--txt-3);min-height:15px;max-width:300px;line-height:1.5}
 .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--accent);
@@ -589,7 +598,7 @@ td.t-link a{display:block;overflow:hidden;text-overflow:ellipsis;white-space:now
 .sf-stage h3{margin:0;font-size:17px;font-weight:650;letter-spacing:-.01em;color:var(--txt)}
 .sf-stage p{margin:0;font-size:12.5px;color:var(--txt-2);line-height:1.5;max-width:320px}
 .sf-col{display:flex;flex-direction:column;align-items:center;gap:15px}
-.sf-bar{width:min(320px,82%);height:9px;border-radius:99px;background:#1e2836;overflow:hidden}
+.sf-bar{width:min(320px,82%);height:9px;border-radius:99px;background:var(--track);overflow:hidden}
 .sf-bar i{display:block;height:100%;background:var(--accent);width:0;transition:width .25s ease}
 .sf-meta{font-size:11.5px;color:var(--txt-3);min-height:14px;display:flex;gap:8px}
 .sf-check{width:66px;height:66px;border-radius:99px;background:rgba(52,211,153,.15);
@@ -624,7 +633,7 @@ tr.selrow td{background:var(--accent-soft)}
 .selbar .btn{flex:0 0 auto;white-space:nowrap}
 .selbar.on{transform:translate(-50%,0)}
 .selbar .n{
-  font-weight:800;background:var(--accent);color:#14100a;
+  font-weight:800;background:var(--accent);color:var(--on-accent);
   border-radius:8px;padding:2px 9px;font-variant-numeric:tabular-nums;
 }
 @media(prefers-reduced-motion:reduce){ .selbar{transition:none} }
@@ -653,10 +662,10 @@ tr.selrow td{background:var(--accent-soft)}
 .themerow{display:flex;gap:10px;flex-wrap:wrap}
 .swatch{display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px;
   border:1px solid var(--line);border-radius:11px;transition:.14s}
-.swatch:hover{border-color:#3a4a66}
+.swatch:hover{border-color:var(--line-hover-2)}
 .swatch.on{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
 .sw-bg{display:block;width:74px;height:46px;border-radius:7px;position:relative;overflow:hidden;
-  border:1px solid rgba(255,255,255,.08)}
+  border:1px solid var(--hairline)}
 .sw-panel{position:absolute;left:7px;top:7px;right:7px;height:14px;border-radius:4px}
 .sw-acc{position:absolute;left:7px;bottom:7px;width:26px;height:9px;border-radius:99px}
 .sw-name{font-size:11px;font-weight:600;color:var(--txt-2)}
@@ -961,6 +970,7 @@ tr.selrow td{background:var(--accent-soft)}
       <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-1 5h2v2h-2zm0 4h2v6h-2z"/></svg>
       <span class="msgBtnLabel">How it works</span>
     </button>
+    <button class="btn ghost" id="modeBtn" onclick="toggleThemeMode()" title="Switch to light"></button>
     <button class="btn ghost" id="helpBtn" onclick="openHelp()" title="Questions for the video team?">
       <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 17h-2v-2h2v2zm1.8-7.1-.9.9c-.7.7-1.1 1.3-1.1 2.7h-2v-.5c0-1.1.4-2.1 1.2-2.8l1.2-1.3c.4-.4.6-.9.6-1.4a2 2 0 1 0-4 0H8a4 4 0 1 1 8 0c0 .9-.4 1.7-1.2 2.4z"/></svg>
       <span class="msgBtnLabel">Help</span>
@@ -1570,7 +1580,7 @@ tr.selrow td{background:var(--accent-soft)}
 /* Build stamp — bump on each deployment to match the Apps Script deployment
    label. Must equal BUILD in Code.gs; the admin Tools menu shows both so a
    half-paste is obvious. */
-var UI_BUILD = 'V40';
+var UI_BUILD = 'V41';
 
 var S = {
   serverBuild:'',
@@ -1620,9 +1630,86 @@ var THEMES = {
         glow1:'rgba(74,222,128,.08)', glow2:'rgba(56,189,248,.05)' }
 };
 
+/* The same four looks on a white ground. Not an inversion: on white the
+   accent has to darken to stay legible (a #c8933f gold reads at 2.7:1 on
+   white and fails), and text-on-accent flips to white. Every token the dark
+   palettes set is set here too, so nothing can fall through. */
+var THEMES_LIGHT = {
+  r3: { bg:'#f6f7f9', bg2:'#eceff4', panel:'#ffffff', panel2:'#f2f5f9',
+        line:'#d3dae4', lineSoft:'#e5eaf1', txt:'#141c27', txt2:'#4c5c70', txt3:'#75849a',
+        accent:'#8a5f1e', accentDeep:'#6a4816', accentSoft:'rgba(138,95,30,.12)',
+        glow1:'rgba(200,147,63,.10)', glow2:'rgba(56,189,248,.05)',
+        track:'#e3e8ef', onAccent:'#ffffff', scrim:'rgba(20,28,39,.42)',
+        thumb:'#c6cfdb', thumbHover:'#aab6c6', lineHover:'#b9c4d2', lineHover2:'#a7b4c5',
+        hairline:'rgba(0,0,0,.08)', shadow:'0 10px 30px rgba(23,33,48,.13)', headerBg:'rgba(246,247,249,.88)' },
+  midnight: { bg:'#f5f7fa', bg2:'#e9eef5', panel:'#ffffff', panel2:'#f1f5fa',
+        line:'#d0dae6', lineSoft:'#e3eaf3', txt:'#101a28', txt2:'#48586c', txt3:'#71829a',
+        accent:'#a06508', accentDeep:'#7d4e05', accentSoft:'rgba(160,101,8,.12)',
+        glow1:'rgba(246,168,33,.10)', glow2:'rgba(63,159,216,.05)',
+        track:'#e0e7f0', onAccent:'#ffffff', scrim:'rgba(16,26,40,.42)',
+        thumb:'#c3cedc', thumbHover:'#a7b5c7', lineHover:'#b6c2d3', lineHover2:'#a3b1c4',
+        hairline:'rgba(0,0,0,.08)', shadow:'0 10px 30px rgba(16,26,40,.13)', headerBg:'rgba(245,247,250,.88)' },
+  steel: { bg:'#f4f8fa', bg2:'#e8f0f5', panel:'#ffffff', panel2:'#eff6fa',
+        line:'#cddce6', lineSoft:'#e1ecf3', txt:'#0f1c24', txt2:'#456070', txt3:'#6d8897',
+        accent:'#1a6d9e', accentDeep:'#12557c', accentSoft:'rgba(26,109,158,.12)',
+        glow1:'rgba(86,179,232,.09)', glow2:'rgba(200,147,63,.05)',
+        track:'#dde8f0', onAccent:'#ffffff', scrim:'rgba(15,28,36,.42)',
+        thumb:'#bfd0dc', thumbHover:'#a3b8c8', lineHover:'#b2c5d3', lineHover2:'#9fb5c5',
+        hairline:'rgba(0,0,0,.08)', shadow:'0 10px 30px rgba(15,28,36,.13)', headerBg:'rgba(244,248,250,.88)' },
+  stage: { bg:'#f4faf7', bg2:'#e8f4ee', panel:'#ffffff', panel2:'#eff9f4',
+        line:'#cbe3d7', lineSoft:'#e0f0e8', txt:'#0f1f18', txt2:'#446356', txt3:'#6d8f7f',
+        accent:'#127a41', accentDeep:'#0d5c31', accentSoft:'rgba(18,122,65,.12)',
+        glow1:'rgba(74,222,128,.08)', glow2:'rgba(56,189,248,.05)',
+        track:'#dcefe5', onAccent:'#ffffff', scrim:'rgba(15,31,24,.42)',
+        thumb:'#bedbcd', thumbHover:'#a2c6b4', lineHover:'#b0cfbf', lineHover2:'#9dc0ae',
+        hairline:'rgba(0,0,0,.08)', shadow:'0 10px 30px rgba(15,31,24,.13)', headerBg:'rgba(244,250,247,.88)' }
+};
+function themeMode(){
+  try{ return localStorage.getItem('vt_mode')==='light' ? 'light' : 'dark'; }catch(e){ return 'dark'; }
+}
+function setThemeMode(mode){
+  try{ localStorage.setItem('vt_mode', mode==='light'?'light':'dark'); }catch(e){}
+  applyTheme(S.theme); paintModeBtn();
+  // Status colours are written into inline styles when a row renders, so the
+  // page has to be redrawn or it keeps the other mode's palette.
+  if(S.me && S.me.role) renderAll();
+  toast(mode==='light' ? 'Light theme.' : 'Dark theme.','ok');
+}
+function toggleThemeMode(){ setThemeMode(themeMode()==='light' ? 'dark' : 'light'); }
+function paintModeBtn(){
+  var b=document.getElementById('modeBtn'); if(!b) return;
+  var light = themeMode()==='light';
+  b.title = light ? 'Switch to dark' : 'Switch to light';
+  b.innerHTML = light
+    ? '<svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg>'
+    : '<svg viewBox="0 0 24 24"><path d="M12 17a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-13.5 1.6 2.4h-3.2zM12 20.5l-1.6-2.4h3.2zM3.5 12l2.4-1.6v3.2zM20.5 12l-2.4 1.6v-3.2zM6 6l2.8.6-1.6 1.6zM18 18l-2.8-.6 1.6-1.6zM18 6l-.6 2.8-1.6-1.6zM6 18l.6-2.8 1.6 1.6z"/></svg>';
+}
+
 function applyTheme(name){
-  var t = THEMES[name] || THEMES.r3;
+  var base = THEMES[name] || THEMES.r3;
+  var key  = THEMES[name] ? name : 'r3';
+  var t    = base;
+  if(themeMode()==='light'){
+    var L = THEMES_LIGHT[key] || THEMES_LIGHT.r3;
+    t = {}; for(var k in base) t[k]=base[k]; for(var k2 in L) t[k2]=L[k2];
+    t.label = base.label;
+  }
   var r = document.documentElement.style;
+  r.setProperty('--track', t.track || '#1e2836');
+  r.setProperty('--on-accent', t.onAccent || '#0b0f14');
+  r.setProperty('--scrim', t.scrim || 'rgba(3,6,10,.72)');
+  r.setProperty('--thumb', t.thumb || '#233046');
+  r.setProperty('--thumb-hover', t.thumbHover || '#2e3d57');
+  r.setProperty('--line-hover', t.lineHover || '#2f3f59');
+  r.setProperty('--line-hover-2', t.lineHover2 || '#3a4a66');
+  r.setProperty('--hairline', t.hairline || 'rgba(255,255,255,.08)');
+  r.setProperty('--shadow', t.shadow || '0 10px 30px rgba(0,0,0,.45)');
+  r.setProperty('--header-bg', t.headerBg || 'rgba(11,15,20,.85)');
+  // Semantic colours double as text on light surfaces; the dark-mode set is
+  // far too pale on white, so light mode gets a darkened equivalent.
+  var SEM = { red:'#ef4444', green:'#34d399', blue:'#38bdf8', purple:'#a78bfa', orange:'#fb923c' };
+  for(var key in SEM) r.setProperty('--'+key, legible(SEM[key]));
+  document.documentElement.setAttribute('data-mode', themeMode());
   r.setProperty('--bg',t.bg); r.setProperty('--bg-2',t.bg2);
   r.setProperty('--panel',t.panel); r.setProperty('--panel-2',t.panel2);
   r.setProperty('--line',t.line); r.setProperty('--line-soft',t.lineSoft);
@@ -1630,7 +1717,8 @@ function applyTheme(name){
   r.setProperty('--accent',t.accent); r.setProperty('--accent-deep',t.accentDeep);
   r.setProperty('--accent-soft',t.accentSoft);
   r.setProperty('--glow1',t.glow1); r.setProperty('--glow2',t.glow2);
-  S.theme = THEMES[name] ? name : 'r3';
+  S.theme = key;
+  paintModeBtn();
 }
 
 var BOOT_VIEW = (new URLSearchParams(location.search).get('view') || '');
@@ -2563,7 +2651,7 @@ function clientStageBadge(v){
          : (ss==='Downloaded'||ss==='Needs Tested'||ss==='Issue')? {label:'Downloaded', col:'#38bdf8'}
          :                                                         {label:'Received',   col:'#34d399'};
   return '<span class="pill" title="Where this cut is with the video team"' +
-         ' style="background:'+hexa(st.col,.16)+';color:'+st.col+'">'+esc(st.label)+'</span>';
+         ' style="background:'+hexa(st.col,.14)+';color:'+legible(st.col)+'">'+esc(st.label)+'</span>';
 }
 function clientStatusSeg(v){
   var st = v.status || '';
@@ -2571,7 +2659,7 @@ function clientStatusSeg(v){
   var fin    = (st==='Final');
   function seg(on, color, label, act){
     return '<button class="cseg-b'+(on?' on':'')+'"' +
-           (on ? ' style="--seg:'+color+';--segbg:'+hexa(color,.16)+'"' : '') +
+           (on ? ' style="--seg:'+legible(color)+';--segbg:'+hexa(color,.14)+'"' : '') +
            ' onclick="event.stopPropagation();'+act+'" title="'+esc(label)+'">' +
            '<span class="d"></span><span class="lbl">'+esc(label)+'</span></button>';
   }
@@ -2589,11 +2677,11 @@ function statusPill(v, kind){
   var col = (kind==='status' ? S.colours : S.showColours)[val] || '#64748b';
   var admin = S.me.role==='admin';
   if(!admin && kind==='status'){
-    if(!hasCut(v)) return '<span class="pill" style="background:'+hexa('#ef4444',.16)+';color:#ef4444">Missing</span>';
+    if(!hasCut(v)) return '<span class="pill" style="background:'+hexa('#ef4444',.14)+';color:'+legible('#ef4444')+'">Missing</span>';
     return clientStatusSeg(v);
   }
   return '<span class="pill'+(admin?' editable':'')+'"' +
-         ' style="background:'+hexa(col,.16)+';color:'+col+'"' +
+         ' style="background:'+hexa(col,.14)+';color:'+legible(col)+'"' +
          (admin ? ' onclick="openStatusMenu(event,\''+v.id+'\',\''+kind+'\')" title="Click to change"' : '') +
          '>'+esc(val||'—')+'</span>';
 }
@@ -3735,7 +3823,7 @@ function chipRow(label, list, colours, cur, videoId, kind){
     var col = colours[st]||'#64748b';
     h += '<button class="chip'+(cur===st?' on':'')+'" onclick="pickStatus(\''+videoId+'\',\''+
          kind+'\',\''+jsq(st)+'\')"'+
-         (cur===st?' style="border-color:'+col+';color:'+col+';background:'+hexa(col,.14)+'"':'')+'>'+
+         (cur===st?' style="border-color:'+legible(col)+';color:'+legible(col)+';background:'+hexa(col,.14)+'"':'')+'>'+
          esc(st)+'</button>';
   });
   return h + '</div>';
@@ -3757,7 +3845,7 @@ function activityItem(a){
   } else {
     if(a.from) h += '<span style="font-size:12.5px;color:var(--txt-3)">'+esc(a.from)+'</span>' +
                     '<span style="color:var(--txt-3)">→</span>';
-    h += '<span style="font-size:12.5px;font-weight:650;color:'+col+'">'+esc(a.to)+'</span>';
+    h += '<span style="font-size:12.5px;font-weight:650;color:'+legible(col)+'">'+esc(a.to)+'</span>';
   }
   h += '<span style="flex:1"></span><span class="tl-when">'+esc(ago(a.time))+'</span></div>';
   h += '<div style="font-size:11.5px;color:var(--txt-3)">'+esc(a.by||'unknown')+
@@ -5577,6 +5665,28 @@ function jsq(s){ return esc(s).replace(/'/g,"\\'"); }
     Defence in depth: the server rejects them on submit, but a link typed
     straight into the Sheet would otherwise reach the DOM. */
 function safeUrl(u){ var v=String(u||'').trim(); return /^https?:\/\//i.test(v)?v:'#'; }
+/* Status colours come from the Config sheet, tuned for a dark page: on white
+   a #34d399 green reads near 2:1 and vanishes. This darkens a colour only as
+   far as it must to clear 4.5:1 on white, keeping the hue; in dark mode it
+   returns the colour untouched. */
+function _lum(r,g,b){
+  function f(x){ x/=255; return x<=0.03928 ? x/12.92 : Math.pow((x+0.055)/1.055,2.4); }
+  return 0.2126*f(r)+0.7152*f(g)+0.0722*f(b);
+}
+function _rgb(hex){
+  var h=String(hex||'').replace('#','');
+  if(h.length===3) h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+  var v=parseInt(h,16);
+  return isNaN(v) ? [100,116,139] : [(v>>16)&255,(v>>8)&255,v&255];
+}
+function legible(hex){
+  if(themeMode()!=='light') return hex;
+  var c=_rgb(hex), k=0;
+  while(k<24 && (1.05)/(_lum(c[0],c[1],c[2])+0.05) < 4.5){
+    c=[Math.round(c[0]*0.88), Math.round(c[1]*0.88), Math.round(c[2]*0.88)]; k++;
+  }
+  return '#'+c.map(function(x){ return ('0'+x.toString(16)).slice(-2); }).join('');
+}
 function hexa(hex,a){
   var h = String(hex).replace('#','');
   if(h.length===3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
