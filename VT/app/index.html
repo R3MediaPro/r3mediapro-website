@@ -1596,7 +1596,7 @@ tr.selrow td{background:var(--accent-soft)}
 /* Build stamp — bump on each deployment to match the Apps Script deployment
    label. Must equal BUILD in Code.gs; the admin Tools menu shows both so a
    half-paste is obvious. */
-var UI_BUILD = 'V42';
+var UI_BUILD = 'V43';
 
 var S = {
   serverBuild:'',
@@ -3763,6 +3763,8 @@ function renderShowday(){
            (S.me.role==='admin'
              ? v.history.length+(v.history.length===1?' version':' versions')
              : 'History')+'</button>';
+      if(S.me.role==='admin')
+        h += '<button class="btn sm ghost" onclick="openVideo(\''+v.id+'\')" title="Edit title, number, section…">Edit</button>';
       h += '</div>';
       h += '<div class="sd-print-flag">'+(hasCut(v)?'':'NO FILE')+'</div>';
       h += '</div>';
