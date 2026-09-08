@@ -1596,7 +1596,7 @@ tr.selrow td{background:var(--accent-soft)}
 /* Build stamp — bump on each deployment to match the Apps Script deployment
    label. Must equal BUILD in Code.gs; the admin Tools menu shows both so a
    half-paste is obvious. */
-var UI_BUILD = 'V43';
+var UI_BUILD = 'V44';
 
 var S = {
   serverBuild:'',
@@ -3659,7 +3659,8 @@ function renderReorder(){
   h += '<div class="reorderbar">' +
        '<div class="t"><b>Reordering the rundown.</b> Drag a video, or use the arrows. ' +
        'Move one past a section header to put it in that section. ' +
-       'Video numbers stay exactly as they are.</div>' +
+       'Video numbers stay exactly as they are. Edit changes a title or number in place; ' +
+       'a video\'s section is wherever you drop it.</div>' +
        '<button class="btn sm" onclick="cancelReorder()">Cancel</button>' +
        '<button class="btn sm primary" onclick="saveOrderNow()">Save order</button>' +
        '</div>';
@@ -3690,6 +3691,7 @@ function renderReorder(){
            verBadge(v) +
            (v.uploader?'<span>'+esc(v.uploader)+'</span>':'') +
          '</div></div>';
+    h += '<button class="btn sm ghost" onclick="openVideo(\''+v.id+'\')" title="Edit title, number…">Edit</button>';
     h += '<div class="nudge"><button onclick="nudgeDraft('+i+',-1)" title="Up">▲</button>' +
          '<button onclick="nudgeDraft('+i+',1)" title="Down">▼</button></div>';
     h += '</div>';
