@@ -1124,6 +1124,7 @@ tr.selrow td{background:var(--accent-soft)}
       <input id="sfLink" placeholder="https://…  (Frame.io, Drive, Dropbox, WeTransfer)"
              oninput="onLinkTyped()">
       <div class="hint" id="linkHint">Or paste the whole line from the email — we'll pull the URL out.</div>
+      <div class="note warn" id="linkNotice" style="display:none;margin-top:8px"></div>
       <div id="sameLinkWrap" style="display:none;margin-top:9px">
         <button type="button" class="btn sm" onclick="useSameLink()">↺ The link hasn't changed — new cut behind it</button>
         <div class="hint" style="margin-top:5px">This fills in the link we have on file —
@@ -1375,6 +1376,14 @@ tr.selrow td{background:var(--accent-soft)}
     </div>
 
     <div class="field">
+      <label>Saved reasons for flagging an Issue</label>
+      <textarea id="cfgIssueTpl" style="min-height:110px;font-size:12.5px"
+        placeholder="One reason per line. They appear in a dropdown when you flag an Issue."></textarea>
+      <div class="hint" style="margin-top:6px">One per line. Pick one when flagging an Issue and it drops into the box — edit it there if the case needs more.</div>
+      <button class="btn sm" style="margin-top:8px" onclick="saveIssueTemplates()">Save reasons</button>
+    </div>
+
+    <div class="field">
       <label>What senders can open</label>
       <label style="display:flex;align-items:center;gap:9px;font-weight:600;cursor:pointer">
         <input type="checkbox" id="cfgLinks" onchange="toggleClientLinks(this.checked)"
@@ -1438,6 +1447,9 @@ tr.selrow td{background:var(--accent-soft)}
     <div class="note warn" id="issueWho"></div>
     <div class="field">
       <label><span id="issueLabel">What's wrong with it?</span> <span class="req">*</span></label>
+      <select id="issueTpl" onchange="insertIssueTemplate(this)" style="max-width:100%;margin-bottom:6px">
+        <option value="">Insert a saved reason…</option>
+      </select>
       <textarea id="issueNote" style="min-height:92px"
         placeholder="e.g. Audio is out of sync from 0:34. Needs a new export."></textarea>
       <div class="hint">Saved to the video's history, so the reason survives long after everyone has forgotten it.</div>
@@ -1600,7 +1612,7 @@ tr.selrow td{background:var(--accent-soft)}
 /* Build stamp — bump on each deployment to match the Apps Script deployment
    label. Must equal BUILD in Code.gs; the admin Tools menu shows both so a
    half-paste is obvious. */
-var UI_BUILD = 'V46';
+var UI_BUILD = 'V47';
 // The address people are given to reach the tracker. Case matters: the host
 // serves /VT/app/ and 404s /vt/app/.
 var PUBLIC_APP_URL = 'https://r3mediapro.com/VT/app/';
@@ -2933,6 +2945,7 @@ function openIssue(videoId, status){
         : 'No email on file for this video&rsquo;s uploader, so there&rsquo;s nobody to draft to.');
 
   document.getElementById('issueNote').value = '';
+  paintIssueSelect();
   show('mIssue');
   setTimeout(function(){ document.getElementById('issueNote').focus(); }, 120);
 }
@@ -3533,7 +3546,32 @@ function setDigestScope(includeMine){
                       : 'Digest reports only what senders did.','ok');
   }).catch(function(e){ S.config.digestScope = was; paintDigest(); err(e); });
 }
+function paintIssueTemplates(){
+  var el = document.getElementById('cfgIssueTpl'); if(!el) return;
+  if(document.activeElement !== el) el.value = (S.config.issueTemplates||[]).join('\n');
+}
+function saveIssueTemplates(){
+  var list = document.getElementById('cfgIssueTpl').value.split('\n').map(function(x){return x.trim();}).filter(Boolean);
+  api('setIssueTemplates', list, S.token, S.eventId).then(function(r){
+    S.config.issueTemplates = r.issueTemplates || list; paintIssueTemplates();
+    toast(list.length+' saved reason'+(list.length===1?'':'s')+'.','ok');
+  }).catch(err);
+}
+function paintIssueSelect(){
+  var sel = document.getElementById('issueTpl'); if(!sel) return;
+  var tpl = S.config.issueTemplates||[];
+  sel.innerHTML = '<option value="">'+(tpl.length?'Insert a saved reason…':'No saved reasons yet — add some under Settings')+'</option>' +
+    tpl.map(function(t,i){ return '<option value="'+i+'">'+esc(t.length>90?t.slice(0,88)+'…':t)+'</option>'; }).join('');
+}
+function insertIssueTemplate(sel){
+  var i = sel.value; sel.value = ''; if(i==='') return;
+  var t = (S.config.issueTemplates||[])[Number(i)] || '';
+  var box = document.getElementById('issueNote');
+  box.value = box.value.trim() ? box.value.trim()+'\n\n'+t : t;
+  box.focus();
+}
 function paintDigest(){
+  paintIssueTemplates();
   var m = document.getElementById('cfgDigestMine');
   if(m) m.checked = String(S.config.digestScope||'senders') === 'all';
   var el = document.getElementById('cfgDigest'); if(!el) return;
@@ -4199,8 +4237,10 @@ function syncSubmitEnabled(){
   var go = document.getElementById('sfGo');
   if(!go || S.uploading) return;
   var chosen = !!document.getElementById('sfVideo').value;
-  go.disabled = !chosen;
-  go.title = chosen ? '' : 'Pick which video this is first';
+  var a = S.pendingFile ? null : linkAdvice(document.getElementById('sfLink').value);
+  var blocked = !!(a && a.kind==='block');
+  go.disabled = !chosen || blocked;
+  go.title = blocked ? 'That link can’t be used — upload the file instead' : (chosen ? '' : 'Pick which video this is first');
 }
 
 /* One surface, two routes: a chosen file dims the link, a typed link dims
@@ -4214,9 +4254,36 @@ function syncSendSurfaces(){
   document.getElementById('linkHint').textContent = hasFile
     ? 'Sending the file above — clear it to paste a link instead.'
     : "Or paste the whole forwarded email — we'll pull the URL out of it.";
+  paintLinkNotice();
   updateNextLabel(); syncSubmitEnabled();
 }
 function onLinkTyped(){ syncSendSurfaces(); }
+
+/* Where a pasted link is going to be a problem, say so while they can still
+   change course — not after they have hit Send. Box needs access granted to
+   the team's account; Molson Coors SharePoint needs a login the team does
+   not have, so it is refused outright (the server refuses it too). */
+function linkAdvice(raw){
+  var m = /https?:\/\/[^\s<>"')]+/i.exec(String(raw||'')); var url = m ? m[0] : String(raw||'').trim();
+  var host = url.replace(/^https?:\/\//i,'').split(/[\/?#]/)[0].toLowerCase();
+  if(!host) return null;
+  if(/sharepoint\.com$/.test(host) && /molsoncoors/.test(host))
+    return { kind:'block', title:'We can’t open Molson Coors SharePoint links',
+             text:'The video team has no Molson Coors login, so a SharePoint or OneDrive link can never be opened on our side. Please upload the file directly here instead — drop it in the box above.' };
+  if(/(^|\.)box\.com$/.test(host))
+    return { kind:'warn', title:'Box links often can’t be opened by the video team',
+             text:'Box shares are usually locked to your company. Any of these works: upload the file directly here (best), send a different link (Frame.io, Drive, Dropbox, WeTransfer), or grant access to Rob@r3mediapro.com in Box before sending this one.' };
+  return null;
+}
+function paintLinkNotice(){
+  var el = document.getElementById('linkNotice'); if(!el) return;
+  var a = linkAdvice(document.getElementById('sfLink').value);
+  if(!a || S.pendingFile){ el.style.display='none'; el.innerHTML=''; return; }
+  el.className = 'note ' + (a.kind==='block' ? 'warn' : 'warn');
+  el.style.borderLeftColor = a.kind==='block' ? 'var(--red)' : 'var(--orange)';
+  el.innerHTML = '<b>'+esc(a.title)+'</b><br>'+esc(a.text);
+  el.style.display = '';
+}
 
 function updateNextLabel(){
   var sel = document.getElementById('sfVideo').value;
@@ -4443,6 +4510,15 @@ function sendAgainst(videoId, who, note){
   if(!S.pendingFile){
     var link = document.getElementById('sfLink').value.trim();
     if(!link) return toast('Drop the video file in, or paste a link.','err');
+    var adv = linkAdvice(link);
+    if(adv && adv.kind==='block'){ paintLinkNotice(); return toast(adv.title+' — upload the file instead.','err'); }
+    if(adv && adv.kind==='warn' && !S.linkAdviceOk){
+      // A popup with the three ways out; "Send anyway" continues with this link.
+      return confirmThen(adv.title, adv.text + '\n\nSend this Box link anyway?',
+        function(){ S.linkAdviceOk = true; show('mSubmit'); submitNow(); },
+        { go:'Send anyway', danger:false });
+    }
+    S.linkAdviceOk = false;
     sfBusy('Sending your link…', { hint:'Just a moment.' });
     var vNow = byId(videoId);
     var noteOut = (S.sameLinkResend && vNow && link===vNow.link)
