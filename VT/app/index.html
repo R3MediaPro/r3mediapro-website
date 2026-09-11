@@ -2696,10 +2696,20 @@ function verBadge(v){
    flag clears it. */
 function clientStageBadge(v){
   var ss = v.showStatus || '';
-  var st = ss==='In Show'                                        ? {label:'In show',    col:'#a78bfa'}
-         : (ss==='Downloaded'||ss==='Needs Tested'||ss==='Issue')? {label:'Downloaded', col:'#38bdf8'}
-         :                                                         {label:'Received',   col:'#34d399'};
-  return '<span class="pill" title="Where this cut is with the video team"' +
+  // Issue used to be folded into "Downloaded" for clients, leaving the
+  // "New coming" segment as their only cue that something was wrong. It is
+  // its own badge now, carrying the reason as hover text when we have it.
+  var st = ss==='In Show'                          ? {label:'In show',    col:'#a78bfa'}
+         : ss==='Issue'                            ? {label:'Issue — new cut needed', col:'#ef4444'}
+         : (ss==='Downloaded'||ss==='Needs Tested')? {label:'Downloaded', col:'#38bdf8'}
+         :                                           {label:'Received',   col:'#34d399'};
+  var tip = 'Where this cut is with the video team';
+  if(ss==='Issue'){
+    var why = '';
+    (v.activity||[]).forEach(function(a){ if(a.type==='showstatus' && a.to==='Issue' && a.detail) why = a.detail; });
+    tip = why ? 'The video team flagged a problem: '+why : 'The video team flagged a problem with this cut — a new version is needed.';
+  }
+  return '<span class="pill" title="'+esc(tip)+'"' +
          ' style="background:'+hexa(st.col,.14)+';color:'+legible(st.col)+'">'+esc(st.label)+'</span>';
 }
 function clientStatusSeg(v){
