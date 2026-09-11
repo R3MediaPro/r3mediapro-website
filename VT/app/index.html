@@ -1601,6 +1601,9 @@ tr.selrow td{background:var(--accent-soft)}
    label. Must equal BUILD in Code.gs; the admin Tools menu shows both so a
    half-paste is obvious. */
 var UI_BUILD = 'V44';
+// The address people are given to reach the tracker. Case matters: the host
+// serves /VT/app/ and 404s /vt/app/.
+var PUBLIC_APP_URL = 'https://r3mediapro.com/VT/app/';
 
 var S = {
   serverBuild:'',
@@ -2975,7 +2978,7 @@ function draftIssueEmail(videoId, status, note){
         '  ' + note + '\n\n' +
         (v.link ? 'The cut we\'re looking at:\n' + v.link + '\n\n' : '') +
         'Could you send a new version when you get a chance? Straight into the tracker:\n' +
-        (S.appUrl || window.location.href.split('?')[0]) + '\n\n') +
+        PUBLIC_APP_URL + '\n\n') +
     'Thanks,\nThe video team\n';
   openMail('mailto:' + encodeURIComponent(to) +
               '?subject=' + encodeURIComponent(subject) +
