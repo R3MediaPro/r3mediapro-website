@@ -1600,7 +1600,7 @@ tr.selrow td{background:var(--accent-soft)}
 /* Build stamp — bump on each deployment to match the Apps Script deployment
    label. Must equal BUILD in Code.gs; the admin Tools menu shows both so a
    half-paste is obvious. */
-var UI_BUILD = 'V45';
+var UI_BUILD = 'V46';
 // The address people are given to reach the tracker. Case matters: the host
 // serves /VT/app/ and 404s /vt/app/.
 var PUBLIC_APP_URL = 'https://r3mediapro.com/VT/app/';
@@ -4966,6 +4966,14 @@ function selectAllShown(on){
   renderAll();
 }
 function clearSel(){ SEL = {}; renderAll(); }
+function setShowStatusSelected(status){
+  var ids = Object.keys(SEL); if(!ids.length) return;
+  if(!confirm('Set '+ids.length+' video'+(ids.length===1?'':'s')+' to "'+status+'"?')) return;
+  api('setShowStatusMany', ids, status, S.token, S.eventId).then(function(r){
+    S.videos = r.videos; renderAll();
+    toast((r.changed||0)+' set to '+status+'.','ok');
+  }).catch(err);
+}
 
 /* The bar is the only thing that tells you a selection exists, so it has to
    survive every re-render — hence rebuilding it rather than toggling a class. */
@@ -4985,6 +4993,13 @@ function paintSelection(){
       ? '<button class="btn sm" onclick="markSelectedSeen()">Mark as seen</button>' : '') +
     '<button class="btn sm" onclick="openNumbering()">Number</button>' +
     '<button class="btn sm ghost" onclick="clearNumbering()">Clear numbers</button>' +
+    // one call for the whole selection; Issue and Deleted stay one-at-a-time
+    // because each needs its own reason
+    '<select class="btn sm" onchange="if(this.value){ setShowStatusSelected(this.value); this.value=\'\'; }" title="Set the show status of every selected video">' +
+      '<option value="">Set show status…</option>' +
+      (S.showStatuses||[]).filter(function(x){ return x!=='Issue' && x!=='Deleted'; })
+        .map(function(x){ return '<option value="'+esc(x)+'">'+esc(x)+'</option>'; }).join('') +
+    '</select>' +
     '<button class="btn sm danger" onclick="deleteSelected()">Delete selected</button>';
   bar.classList.add('on');
   document.querySelectorAll('[data-sel]').forEach(function(cb){
