@@ -1760,16 +1760,26 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbwSNGWQmyLeb0S-NrkjUnJmgF
 
 function apiCall(fn, args){
   var payload = JSON.stringify({ fn:fn, args:args });
-  var TRIES = 5;   // raised from 3 once the server grew replay guards — a
-                   // retry can no longer double-file, so patience is free
+  var TRIES = 3;
+  // A request that never answers used to hang the page forever ("stuck
+  // loading"). 45 s is longer than the slowest write seen (29 s) and shorter
+  // than Google's own gateway limit, so a hung call ends as a retryable
+  // Timeout instead of a spinner.
+  var TIMEOUT_MS = 45000;
 
   function attempt(i){
+    var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var timer = ctl ? setTimeout(function(){ ctl.abort(); }, TIMEOUT_MS) : null;
     return fetch(API_URL, {
       method  : 'POST',
       headers : { 'Content-Type':'text/plain;charset=utf-8' },
       body    : payload,
-      redirect: 'follow'
+      redirect: 'follow',
+      signal  : ctl ? ctl.signal : undefined
     })
+    .then(function(res){ if(timer) clearTimeout(timer); return res; },
+          function(e){ if(timer) clearTimeout(timer);
+                       throw (e && e.name==='AbortError') ? new Error('Timeout — the server took too long to answer.') : e; })
     .then(function(res){ return res.text(); })
     .then(function(text){
       var data;
@@ -2919,14 +2929,30 @@ function commitIssue(alsoEmail){
   if(!note) return toast(job.status==='Deleted' ? 'Say why it is being cut first.'
                                                        : 'Say what the problem is first.','err');
 
-  api('setShowStatus', job.id, job.status, S.token, note, S.eventId).then(function(r){
-    S.videos = r.videos;
+  function done(){
     closeAll(); renderAll();
     if(S.historyId===job.id) renderHistoryBody();
     if(alsoEmail) draftIssueEmail(job.id, job.status, note);
     else toast(job.status==='Deleted' ? 'Cut from the show.' : 'Flagged as '+job.status+'.','ok');
     S.issueFor = null;
-  }).catch(err);
+  }
+  api('setShowStatus', job.id, job.status, S.token, note, S.eventId).then(function(r){
+    S.videos = r.videos; done();
+  }).catch(function(e){
+    // The server keeps running after the gateway gives up on a slow request,
+    // so "failed" here has meant "saved, but the answer never arrived" — the
+    // flag was on the sheet while the page said it wasn't. Look before
+    // reporting: if the flag is there, it worked.
+    var msg = (e && e.message) ? e.message : String(e);
+    if(msg.indexOf('PASSWORD_REQUIRED') >= 0) return err(e);
+    apiQuiet('getBootstrap', S.token, S.eventId).then(function(b){
+      if(b && b.videos) S.videos = b.videos;
+      var v = byId(job.id);
+      if(v && v.showStatus === job.status){
+        toast('That took a while, but it saved.','ok'); done();
+      } else err(e);
+    }).catch(function(){ err(e); });
+  });
 }
 
 function draftIssueEmail(videoId, status, note){
