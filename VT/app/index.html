@@ -2170,9 +2170,22 @@ function renderAll(){ renderStats(); renderFilters(); renderView(); paintSelecti
    measures right now rather than a guessed constant. */
 function syncHdrH(){
   var hd = document.querySelector('header');
-  if(hd) document.documentElement.style.setProperty('--hdr-h', (hd.offsetHeight - 1) + 'px');
+  if(!hd) return;
+  // getBoundingClientRect, not offsetHeight: the header is sticky, and its
+  // rendered box is what the table row has to clear.
+  document.documentElement.style.setProperty('--hdr-h', (Math.round(hd.getBoundingClientRect().height) - 1) + 'px');
 }
 window.addEventListener('resize', syncHdrH);
+// Things inside the header open and close without a re-render (the updates
+// feed, the event switcher, filters wrapping), which left the pinned row
+// floating at a stale height. Watch the header's size directly.
+if(window.ResizeObserver){
+  var _hdrRO = new ResizeObserver(function(){ syncHdrH(); });
+  document.addEventListener('DOMContentLoaded', function(){
+    var hd = document.querySelector('header'); if(hd) _hdrRO.observe(hd);
+  });
+  var _hd0 = document.querySelector('header'); if(_hd0) _hdrRO.observe(_hd0);
+}
 
 function renderStats(){
   var t = tally(S.videos);
