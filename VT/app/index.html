@@ -2903,13 +2903,11 @@ function downloadAndMark(id){
   // Tell the filer on the Mac what this download IS, so the file that lands
   // in ~/Downloads can be renamed and filed without guessing. Best-effort.
   apiQuiet('noteDownload', id, S.token, S.eventId).catch(function(){});
-  if(v.showStatus==='Downloaded') return;                 // already there
-  api('setShowStatus', id, 'Downloaded', S.token, '', S.eventId).then(function(r){
-    S.videos = r.videos; renderAll();
-    if(S.historyId===id) renderHistoryBody();
-    toast(plan.mode==='download' ? 'Downloading — marked Downloaded.'
-                                 : 'Opened the link — marked Downloaded.','ok');
-  }).catch(err);
+  // The show status is NOT changed here any more. It used to flip to
+  // Downloaded on the click, which said "downloaded" about files that had not
+  // landed, failed, or were re-clicked — Rob marks it by hand now.
+  toast(plan.mode==='download' ? 'Downloading. Mark it Downloaded once it has landed.'
+                               : 'Opened the link. Mark it Downloaded once you have the file.','ok');
 }
 
 /* ---- issue flow ------------------------------------------------------- */
