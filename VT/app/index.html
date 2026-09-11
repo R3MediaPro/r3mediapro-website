@@ -266,9 +266,7 @@ td.t-notes .addnote{opacity:.7}
 .c-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto;padding-top:2px}
 
 /* ============================  TABLE  ============================ */
-.tbl-wrap{overflow:clip;border:1px solid var(--line-soft);border-radius:var(--radius);background:var(--panel)}
-@supports not (overflow:clip){.tbl-wrap{overflow:visible}}
-@media(max-width:900px){.tbl-wrap{overflow-x:auto}}   /* narrow: scroll beats sticky */
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line-soft);border-radius:var(--radius);background:var(--panel)}
 table{width:100%;border-collapse:collapse;font-size:13px;min-width:960px}
 table.slim{min-width:0}
 table.slim td,table.slim th{padding:12px}
@@ -280,7 +278,7 @@ table.slim td,table.slim th{padding:12px}
   table.slim .t-acts .btn{white-space:nowrap}
   table.slim .uploader .avatar{display:none}
 }
-thead th{position:sticky;top:var(--hdr-h,0px);background:var(--panel-2);z-index:5;text-align:left;padding:10px 12px;
+thead th{position:sticky;top:0;background:var(--panel-2);z-index:5;text-align:left;padding:10px 12px;
   font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--txt-3);font-weight:650;
   white-space:nowrap;border-bottom:1px solid var(--line);cursor:pointer;user-select:none}
 thead th:hover{color:var(--txt-2)}
@@ -2164,28 +2162,7 @@ function filtered(){
 /* =========================================================================
    RENDER — shell
    ========================================================================= */
-function renderAll(){ renderStats(); renderFilters(); renderView(); paintSelection(); syncHdrH(); }
-/* The page header is sticky and its height changes (filters wrap, tabs
-   scroll), so the table's frozen header row is pinned at whatever the header
-   measures right now rather than a guessed constant. */
-function syncHdrH(){
-  var hd = document.querySelector('header');
-  if(!hd) return;
-  // getBoundingClientRect, not offsetHeight: the header is sticky, and its
-  // rendered box is what the table row has to clear.
-  document.documentElement.style.setProperty('--hdr-h', (Math.round(hd.getBoundingClientRect().height) - 1) + 'px');
-}
-window.addEventListener('resize', syncHdrH);
-// Things inside the header open and close without a re-render (the updates
-// feed, the event switcher, filters wrapping), which left the pinned row
-// floating at a stale height. Watch the header's size directly.
-if(window.ResizeObserver){
-  var _hdrRO = new ResizeObserver(function(){ syncHdrH(); });
-  document.addEventListener('DOMContentLoaded', function(){
-    var hd = document.querySelector('header'); if(hd) _hdrRO.observe(hd);
-  });
-  var _hd0 = document.querySelector('header'); if(_hd0) _hdrRO.observe(_hd0);
-}
+function renderAll(){ renderStats(); renderFilters(); renderView(); paintSelection(); }
 
 function renderStats(){
   var t = tally(S.videos);
@@ -2350,7 +2327,6 @@ function renderView(){
   if(S.view==='table')   m.innerHTML = renderTable();
   if(S.view==='showday') m.innerHTML = renderShowday();
   if(S.view==='uploaders') m.innerHTML = renderUploaders();
-  syncHdrH();
 }
 
 function emptyState(){
