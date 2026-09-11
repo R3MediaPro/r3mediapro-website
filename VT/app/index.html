@@ -1764,11 +1764,13 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbwSNGWQmyLeb0S-NrkjUnJmgF
 function apiCall(fn, args){
   var payload = JSON.stringify({ fn:fn, args:args });
   var TRIES = 3;
-  // A request that never answers used to hang the page forever ("stuck
-  // loading"). 45 s is longer than the slowest write seen (29 s) and shorter
-  // than Google's own gateway limit, so a hung call ends as a retryable
-  // Timeout instead of a spinner.
-  var TIMEOUT_MS = 45000;
+  // A request that never answers used to hang the page forever, so there is
+  // a timeout — but it must be generous. The same createUploadSession call
+  // was measured at 10 s and, minutes later, 79 s, and Google answered both;
+  // a 45 s limit turned the slow one into "Failed to fetch" for every
+  // uploader for a day. Three minutes: long enough for any real answer,
+  // short enough that a truly dead request still ends.
+  var TIMEOUT_MS = 180000;
 
   function attempt(i){
     var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
