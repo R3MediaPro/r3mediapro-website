@@ -1324,6 +1324,7 @@ tr.selrow td{background:var(--accent-soft)}
 
     <div class="field">
       <label>Problems</label>
+      <div id="upList" class="hint" style="margin:0 0 8px"></div>
       <div id="probSummary" class="hint" style="margin:0 0 8px"></div>
       <button class="btn sm" onclick="copyProblemReport()">Copy problem report</button>
       <div class="hint">Plain text of the recent failures — what the server said, who, which file, which browser.
@@ -1612,7 +1613,7 @@ tr.selrow td{background:var(--accent-soft)}
 /* Build stamp — bump on each deployment to match the Apps Script deployment
    label. Must equal BUILD in Code.gs; the admin Tools menu shows both so a
    half-paste is obvious. */
-var UI_BUILD = 'V47';
+var UI_BUILD = 'V48';
 // The address people are given to reach the tracker. Case matters: the host
 // serves /VT/app/ and 404s /vt/app/.
 var PUBLIC_APP_URL = 'https://r3mediapro.com/VT/app/';
@@ -1877,7 +1878,7 @@ function clearCache(){
    cached copy and the fresh one can never drift apart. */
 function applyBootstrap(d){
     S.videos=d.videos||[]; S.sections=d.sections||[];
-    S.submitters=d.submitters||[]; S.messages=d.messages||[]; S.problems=d.problems||[]; S.pushReady=!!d.pushReady; S.pushEvents=String(d.pushEvents||'');
+    S.submitters=d.submitters||[]; S.messages=d.messages||[]; S.problems=d.problems||[]; S.uploads=d.uploads||[]; S.pushReady=!!d.pushReady; S.pushEvents=String(d.pushEvents||'');
     S.statuses=d.statuses||[]; S.colours=d.colours||{}; S.palette=d.palette||[];
     S.showStatuses=d.showStatuses||[]; S.showColours=d.showColours||{};
     if(d.config&&d.config.eventId){ S.eventId=d.config.eventId; try{localStorage.setItem('vt_event',S.eventId);}catch(e){} }
@@ -1926,6 +1927,7 @@ function boot(){
     startPolling();
     paintSync();
     maybeShowIntro();
+    finishPendingUpload();
   }).catch(function(e){
     var msg = String((e && e.message) || e);
     if(msg.indexOf('PASSWORD_REQUIRED') >= 0){ clearCache(); showGate(); return; }
@@ -3498,7 +3500,30 @@ function fallbackCopy(txt){
   var ta=document.createElement('textarea'); ta.value=txt; ta.style.position='fixed'; ta.style.opacity='0';
   document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); }catch(e){} document.body.removeChild(ta);
 }
+/* Uploads that have opened a slot and not yet filed — who, what, how far,
+   when the browser last reported in. A row that stops reporting is the one
+   to chase; a × forgets a slot you know is dead (a probe, a cancelled try). */
+function paintUploads(){
+  var el=document.getElementById('upList'); if(!el) return;
+  var us=S.uploads||[];
+  if(!us.length){ el.innerHTML=''; return; }
+  el.innerHTML = '<div style="margin-bottom:4px"><b>Uploads in flight: '+us.length+'</b></div>' + us.map(function(u){
+    var v = u.videoId ? byId(u.videoId) : null;
+    var prog = u.pct!=null ? u.pct+'%'+(u.hbAt ? ', last heard '+ago(u.hbAt) : '') : 'no progress reported yet';
+    return '<div style="display:flex;gap:8px;align-items:center;margin:3px 0">'+
+      '<span style="flex:1">'+esc(((v&&v.number)?v.number+' ':'')+(u.origName||u.fileName||''))+' · '+mb(u.size)+
+      (u.by?' · '+esc(u.by):'')+' · started '+ago(u.at)+' · '+esc(prog)+'</span>'+
+      '<button class="btn sm ghost" data-key="'+esc(u.key)+'" onclick="dismissUpload(this.getAttribute(\'data-key\'))" title="Forget this slot">×</button></div>';
+  }).join('');
+}
+function dismissUpload(key){
+  api('dismissOpenUpload', key, S.token, S.eventId).then(function(r){
+    S.uploads = r && r.uploads ? r.uploads : (S.uploads||[]).filter(function(u){ return u.key!==key; });
+    paintUploads();
+  }).catch(err);
+}
 function paintProblems(){
+  paintUploads();
   var el=document.getElementById('probSummary'); if(!el) return;
   var ps=S.problems||[], fresh=freshProblems().length;
   el.textContent = ps.length ? (ps.length+' logged'+(fresh?' · '+fresh+' new since you last opened updates':'')+
@@ -4362,7 +4387,10 @@ function clearFile(){
 function cancelSubmit(){
   if(S.uploading){
     return confirmThen('Stop the upload?','The partly-uploaded file will be discarded and nothing is recorded.',
-      function(){ S.abort = true; }, {go:'Stop upload'});
+      function(){
+        S.abort = true;
+        if(S.upKey) apiQuiet('abandonUpload', '', S.token, S.vtok, S.eventId, S.upKey).catch(function(){});
+      }, {go:'Stop upload'});
   }
   closeAll();
 }
@@ -4621,10 +4649,42 @@ function sfSuccess(title, hint){
 /* ---- chunked resumable upload straight to Drive ---- */
 var CHUNK = 8 * 1024 * 1024;   // must be a multiple of 256 KB
 
+/* An upload is three hops: ask our server for a Drive slot, stream the file
+   to Drive, tell our server to file it. On 11 Sep every failure logged was
+   the FIRST or THIRD hop — Google's Apps Script backend crawling — and the
+   sender's only option was to start over, re-sending a gigabyte the tracker
+   already had. So: the server hops wait out a slow backend, and once Drive
+   has the file that fact is remembered on this device — a retry, or simply
+   reopening the page later, files it without uploading anything again. */
+var PENDING_KEY = 'vt_pending_upload';
+function readPending(){ try{ return JSON.parse(localStorage.getItem(PENDING_KEY)||'null'); }catch(e){ return null; } }
+function savePending(o){ try{ localStorage.setItem(PENDING_KEY, JSON.stringify(o)); }catch(e){} }
+function clearPending(){ try{ localStorage.removeItem(PENDING_KEY); }catch(e){} }
+
+function upMsg(msg){ var t = document.getElementById('upTxt'); if(t) t.textContent = msg; }
+
+/* The transport already tries three times in quick succession. This keeps
+   at it for a couple of minutes more, saying so on screen, because on a slow
+   day the same call that took 10 s can take 80 and then answer fine. */
+function patient(fnName, args, label, tries){
+  tries = tries || 6; var n = 0;
+  function go(){
+    n++;
+    return apiCall(fnName, args).catch(function(e){
+      var msg = String((e && e.message) || e);
+      var retry = /hiccup|unreadable|Failed to fetch|NetworkError|Load failed|Timeout|took too long/i.test(msg);
+      if(!retry || n >= tries || S.abort) throw e;
+      upMsg(label + ' — the server is slow, trying again (' + n + ' of ' + (tries - 1) + ')…');
+      return new Promise(function(r){ setTimeout(r, Math.min(30000, 4000 * n)); }).then(go);
+    });
+  }
+  return go();
+}
+
 function runUpload(videoId, who, note){
   var file = S.pendingFile;
   var clientTitle = document.getElementById('sfClientTitle').value.trim();
-  S.uploading = true; S.abort = false;
+  S.uploading = true; S.abort = false; S.upKey = '';
   var go = document.getElementById('sfGo');
   go.disabled = true; go.textContent = 'Uploading…';
   sfBusy('Uploading your video…', { bar:true, cancel:true,
@@ -4632,43 +4692,69 @@ function runUpload(videoId, who, note){
   setProgress(0, file.size, 'Asking Drive for an upload slot…');
 
   var started = Date.now();
-  var sess = null;
+  var sess = null, step = 'start';
 
+  // Same file as one that already reached Drive from this device? Skip the
+  // transfer and just file it.
+  var st = readPending();
+  var again = st && st.fileId && st.videoId === videoId && st.origName === file.name &&
+              st.size === file.size && st.lastMod === file.lastModified;
+
+  function completeArgs(fileId){
+    return { videoId:videoId, fileId:fileId || '',
+      fileName: sess ? sess.fileName : '', folderId: sess ? sess.folderId : '',
+      origName: file.name || '',            // the uploader's own file name, for display
+      size:file.size, label: sess ? sess.label : '',
+      submitter:who.name, submitterEmail:who.email, submitterAgency:who.agency,
+      clientTitle:clientTitle, note:note, finality:S.sfFinality||'' };
+  }
   // File it in the tracker. With a fileId when the browser got one; without,
   // the server finds the finished file by name (recovers a lost final response).
   function finalize(fileId){
+    step = 'file';
     setProgress(file.size, file.size,
       fileId ? 'Filing it in the tracker…' : 'Making sure your file landed…');
-    return api('completeUpload',
-      { videoId:videoId, fileId:fileId || '',
-        fileName: sess ? sess.fileName : '', folderId: sess ? sess.folderId : '',
-        origName: file.name || '',            // the uploader's own file name, for display
-        size:file.size, label: sess ? sess.label : '',
-        submitter:who.name, submitterEmail:who.email, submitterAgency:who.agency,
-        clientTitle:clientTitle, note:note, finality:S.sfFinality||'' }, S.token, S.vtok, S.eventId);
+    return patient('completeUpload', [completeArgs(fileId), S.token, S.vtok, S.eventId], 'Filing it in the tracker');
   }
 
-  api('createUploadSession',
-      { videoId:videoId, fileName:file.name, mimeType:file.type||'application/octet-stream',
-        size:file.size, submitter:who.name, submitterAgency:who.agency }, S.token, S.vtok, S.eventId)
-    .then(function(s){
-      sess = s;
-      return sendChunks(s.uploadUrl, file, started);
-    })
-    .then(function(driveFile){
-      return finalize(driveFile && driveFile.id);
-    })
+  var flow;
+  if(again){
+    sess = { fileName: st.fileName, folderId: st.folderId, label: st.label };
+    upMsg('Your file is already in Drive — filing it in the tracker…');
+    flow = Promise.resolve(st.fileId);
+  } else {
+    flow = patient('createUploadSession',
+        [{ videoId:videoId, fileName:file.name, mimeType:file.type||'application/octet-stream',
+           size:file.size, submitter:who.name, submitterEmail:who.email, submitterAgency:who.agency },
+         S.token, S.vtok, S.eventId], 'Asking Drive for an upload slot')
+      .then(function(s){
+        sess = s; step = 'drive'; S.upKey = s.key || (videoId + '|' + s.fileName);
+        return sendChunks(s.uploadUrl, file, started, S.upKey);
+      })
+      .then(function(driveFile){
+        var id = driveFile && driveFile.id;
+        if(id) savePending({ videoId:videoId, fileId:id, fileName:sess.fileName, folderId:sess.folderId,
+                             label:sess.label, origName:file.name, size:file.size, lastMod:file.lastModified,
+                             who:who, note:note, clientTitle:clientTitle, finality:S.sfFinality||'',
+                             eventId:S.eventId, at:Date.now() });
+        return id;
+      });
+  }
+
+  flow
+    .then(function(fileId){ return finalize(fileId); })
     .catch(function(uploadErr){
       // The chunk loop failed — but the file may have finished landing in Drive
       // even though the browser never saw the final response. Have the server
       // look for it by name before we call it a failure. (No session = the
       // upload never started, so there is nothing to recover.)
       var m = String((uploadErr && uploadErr.message) || uploadErr);
-      if(m.indexOf('cancelled') >= 0 || !sess) throw uploadErr;
+      if(m.indexOf('cancelled') >= 0 || !sess || step === 'file') throw uploadErr;
       return finalize('');
     })
     .then(function(r){
-      S.uploading = false; S.videos = r.videos;
+      clearPending();
+      S.uploading = false; S.upKey = ''; S.videos = r.videos;
       if(r.submitters) S.submitters = r.submitters;
       renderAll();
       sfSuccess(S.me.role==='admin' ? 'Uploaded — saved as '+r.label+'.' : 'Uploaded — thank you!',
@@ -4681,14 +4767,52 @@ function runUpload(videoId, who, note){
       var clear = document.getElementById('fileClear');
       if(clear) clear.style.display = '';
       var msg = String((e && e.message) || e);
-      if(msg.indexOf('cancelled') >= 0){ sfStageHide(); return; }  // user hit Cancel
-      reportProblem('upload', videoId, msg, { fileName: S.pendingFile && S.pendingFile.name, size: S.pendingFile && S.pendingFile.size,
+      if(msg.indexOf('cancelled') >= 0){ clearPending(); sfStageHide(); return; }  // user hit Cancel
+      if(/arrived incomplete|could not be found/i.test(msg)) clearPending();          // nothing usable in Drive
+      reportProblem('upload', videoId, msg, { fileName: file.name, size: file.size, step: step,
                                               submitter: who && who.name, email: who && who.email, agency: who && who.agency });
+      var title, hint;
+      if(step === 'start'){
+        title = 'Upload could not start';
+        hint  = 'The tracker’s server did not answer, so nothing was sent yet. ' + msg + '  Try again in a minute, or paste a link instead.';
+      } else if(step === 'drive'){
+        title = 'Upload didn’t finish';
+        hint  = 'The transfer to Drive stopped. ' + msg + '  Try again — it starts over from the beginning.';
+      } else {
+        title = readPending() ? 'Your video is in Drive — not filed yet' : 'Upload could not be filed';
+        hint  = readPending()
+          ? 'The file arrived in full, but the tracker’s server did not answer when we tried to record it. Nothing needs re-uploading: tap Try again, or just reopen this page later and it finishes by itself.'
+          : msg + '  Try again, or paste a link instead.';
+      }
       // Stays on screen until dismissed — no more relying on a toast you might miss.
-      sfError('Upload didn’t finish',
-        msg + '  Try again, or paste a link instead.',
-        function(){ runUpload(videoId, who, note); });
+      sfError(title, hint, function(){ runUpload(videoId, who, note); });
     });
+}
+
+/* A file that reached Drive but was never filed, left over from an earlier
+   visit. Runs quietly after the tracker loads; one call, no re-upload. */
+function finishPendingUpload(){
+  var st = readPending();
+  if(!st || !st.fileId || S.uploading) return;
+  if(Date.now() - (st.at||0) > 6*24*3600*1000){ clearPending(); return; }   // Drive sessions expire in a week
+  if(st.eventId && S.eventId && st.eventId !== S.eventId) return;
+  var who = st.who || { name:S.submitter, email:S.submitterEmail, agency:S.submitterAgency };
+  apiQuiet('completeUpload',
+    { videoId:st.videoId, fileId:st.fileId, fileName:st.fileName, folderId:st.folderId,
+      origName:st.origName, size:st.size, label:st.label,
+      submitter:who.name, submitterEmail:who.email, submitterAgency:who.agency,
+      clientTitle:st.clientTitle||'', note:st.note||'', finality:st.finality||'' },
+    S.token, S.vtok, S.eventId)
+  .then(function(r){
+    clearPending();
+    if(r && r.videos){ S.videos = r.videos; if(r.submitters) S.submitters = r.submitters; renderAll(); }
+    toast('Your earlier upload of “'+st.origName+'” is now filed'+(r && r.label ? ' as '+r.label : '')+'.','ok');
+  })
+  .catch(function(e){
+    var m = String((e && e.message) || e);
+    if(/not be found|could not be verified|arrived incomplete|turned off/i.test(m)) clearPending();
+    // anything else: the server is slow or offline — try again next visit
+  });
 }
 
 /* Ask Drive what it actually has for this session. Used to recover from a
@@ -4718,8 +4842,13 @@ function queryUploadStatus(url, total){
   });
 }
 
-function sendChunks(url, file, started){
-  var offset = 0, recoveries = 0;
+function sendChunks(url, file, started, hbKey){
+  var offset = 0, recoveries = 0, lastHb = Date.now();
+  function heartbeat(){
+    if(!hbKey || Date.now() - lastHb < 60000) return;
+    lastHb = Date.now();
+    apiQuiet('uploadHeartbeat', hbKey, Math.round(offset / file.size * 100), S.token, S.vtok, S.eventId).catch(function(){});
+  }
   function next(){
     if(S.abort){
       S.abort = false;
@@ -4731,6 +4860,7 @@ function sendChunks(url, file, started){
         if(r.done) return r.data;
         offset = r.next != null ? r.next : end;
         setProgress(offset, file.size, null, started);
+        heartbeat();
         return next();
       })
       .catch(function(e){
@@ -5679,7 +5809,7 @@ function doPin(){
     S.token = r.token; localStorage.setItem('vt_token', r.token);
     return api('getBootstrap', S.token, S.vtok, S.eventId).then(function(d){
       S.viewAs=''; applyIdentity(d.me); S.videos=d.videos; S.sections=d.sections; S.config=d.config;
-      S.submitters=d.submitters||S.submitters; S.messages=d.messages||[]; S.problems=d.problems||[]; S.pushReady=!!d.pushReady; S.pushEvents=String(d.pushEvents||'');
+      S.submitters=d.submitters||S.submitters; S.messages=d.messages||[]; S.problems=d.problems||[]; S.uploads=d.uploads||[]; S.pushReady=!!d.pushReady; S.pushEvents=String(d.pushEvents||'');
       if(d.seen) S.seen=d.seen;          // this path applies the payload inline, not via applyBootstrap
       S.events=d.events||[]; if(d.config&&d.config.eventId) S.eventId=d.config.eventId;
       S.serverBuild=d.serverBuild||'';
