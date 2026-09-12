@@ -4663,6 +4663,49 @@ function clearPending(){ try{ localStorage.removeItem(PENDING_KEY); }catch(e){} 
 
 function upMsg(msg){ var t = document.getElementById('upTxt'); if(t) t.textContent = msg; }
 
+/* MOV/MP4 pre-flight. A QuickTime/MP4 file is a chain of atoms, each saying
+   how long it is, so the file's own table of contents says how big it should
+   be. VT30 v3 arrived at 289 MB of a declared 837 MB: the sender chose it
+   while the export was still writing, and the upload faithfully sent the
+   first third. Walk the chain with a few tiny reads before any byte moves;
+   refuse only on proof (an atom past the end, or no index at all) — anything
+   merely odd is let through for the upload to try. */
+function readSlice(file, start, len){
+  return new Promise(function(res, rej){
+    var r = new FileReader();
+    r.onload = function(){ res(new DataView(r.result)); };
+    r.onerror = function(){ rej(r.error || new Error('read failed')); };
+    r.readAsArrayBuffer(file.slice(start, Math.min(file.size, start + len)));
+  });
+}
+function preflightContainer(file){
+  var name = String(file.name || '').toLowerCase();
+  if(!/\.(mov|mp4|m4v)$/.test(name) || !file.size) return Promise.resolve({ ok:true });
+  var size = file.size, off = 0, sawMoov = false, hops = 0;
+  function step(){
+    if(off >= size || hops++ > 64){
+      return sawMoov ? { ok:true } : { ok:false, why:'it has no index (moov) — the export did not finish writing it' };
+    }
+    return readSlice(file, off, 16).then(function(dv){
+      if(dv.byteLength < 8) return { ok:true };
+      var n = dv.getUint32(0);
+      var typ = String.fromCharCode(dv.getUint8(4), dv.getUint8(5), dv.getUint8(6), dv.getUint8(7));
+      if(n === 1){ if(dv.byteLength < 16) return { ok:true }; n = dv.getUint32(8) * 4294967296 + dv.getUint32(12); }
+      if(n === 0) n = size - off;
+      if(!/^[A-Za-z0-9 ]{4}$/.test(typ) || n < 8) return { ok:true };   // not something we understand — not proof
+      if(typ === 'moov') sawMoov = true;
+      if(off + n > size){
+        return { ok:false, declared: off + n,
+                 why:'the file is ' + mb(size) + ' but its own header says it should be ' + mb(off + n) +
+                     ' — it was still exporting or copying when it was chosen' };
+      }
+      off += n;
+      return step();
+    });
+  }
+  return Promise.resolve().then(step).catch(function(){ return { ok:true }; });   // unreadable → let the upload try
+}
+
 /* The transport already tries three times in quick succession. This keeps
    at it for a couple of minutes more, saying so on screen, because on a slow
    day the same call that took 10 s can take 80 and then answer fine. */
@@ -4723,10 +4766,15 @@ function runUpload(videoId, who, note){
     upMsg('Your file is already in Drive — filing it in the tracker…');
     flow = Promise.resolve(st.fileId);
   } else {
-    flow = patient('createUploadSession',
-        [{ videoId:videoId, fileName:file.name, mimeType:file.type||'application/octet-stream',
-           size:file.size, submitter:who.name, submitterEmail:who.email, submitterAgency:who.agency },
-         S.token, S.vtok, S.eventId], 'Asking Drive for an upload slot')
+    upMsg('Checking the file…');
+    flow = preflightContainer(file)
+      .then(function(pf){
+        if(!pf.ok){ step = 'check'; throw new Error('UNFINISHED: ' + pf.why); }
+        return patient('createUploadSession',
+          [{ videoId:videoId, fileName:file.name, mimeType:file.type||'application/octet-stream',
+             size:file.size, submitter:who.name, submitterEmail:who.email, submitterAgency:who.agency },
+           S.token, S.vtok, S.eventId], 'Asking Drive for an upload slot');
+      })
       .then(function(s){
         sess = s; step = 'drive'; S.upKey = s.key || (videoId + '|' + s.fileName);
         return sendChunks(s.uploadUrl, file, started, S.upKey);
@@ -4772,6 +4820,12 @@ function runUpload(videoId, who, note){
       reportProblem('upload', videoId, msg, { fileName: file.name, size: file.size, step: step,
                                               submitter: who && who.name, email: who && who.email, agency: who && who.agency });
       var title, hint;
+      if(step === 'check'){
+        sfError('This file isn’t finished',
+          'Nothing was uploaded: ' + msg.replace(/^UNFINISHED: /, '') +
+          '. Wait for the export or copy to finish, then choose the file again.', null);
+        return;
+      }
       if(step === 'start'){
         title = 'Upload could not start';
         hint  = 'The tracker’s server did not answer, so nothing was sent yet. ' + msg + '  Try again in a minute, or paste a link instead.';
