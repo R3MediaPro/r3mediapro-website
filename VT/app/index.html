@@ -1332,6 +1332,14 @@ tr.selrow td{background:var(--accent-soft)}
     </div>
 
     <div class="field">
+      <label>Email uploaders</label>
+      <button class="btn sm" onclick="emailAllUploaders()">✉ Email all uploaders</button>
+      <div class="hint">Opens one email with every uploader on this event's videos in BCC, so senders
+        from different agencies never see each other's addresses. Videos marked Deleted are left out.
+        The address list is also copied, in case your mail app trims a long list.</div>
+    </div>
+
+    <div class="field">
       <label>Push to your phone (Pushover)</label>
       <div id="pushSummary" class="hint" style="margin:0 0 8px"></div>
       <div class="row2">
@@ -3368,6 +3376,50 @@ function openMail(href){
   if(!isStandalone()){ window.open(href,'_blank'); return; }
   var a=document.createElement('a'); a.href=href; a.style.display='none';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+/* Every uploader on this event's videos, one email, all in BCC. Addresses come
+   from the videos themselves, not the submitter list, which carries over from
+   past events. Deleted videos are skipped: those people are finished. */
+function uploaderEmailList(){
+  var seen = {}, list = [];
+  (S.videos||[]).forEach(function(v){
+    if(v.status === 'Deleted') return;
+    String(v.uploaderEmail||'').split(/[,;\s]+/).forEach(function(e){
+      e = e.trim();
+      if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) return;
+      var k = e.toLowerCase();
+      if(seen[k]) return;
+      seen[k] = 1; list.push(e);
+    });
+  });
+  return list.sort(function(a,b){ return a.toLowerCase().localeCompare(b.toLowerCase()); });
+}
+function emailAllUploaders(){
+  if(S.me.role !== 'admin') return;
+  var list = uploaderEmailList();
+  if(!list.length) return toast('No uploader emails on file yet.','err');
+  var missing = (S.videos||[]).filter(function(v){ return v.status!=='Deleted' && !v.uploaderEmail; }).length;
+  confirmThen('Email ' + list.length + ' uploader' + (list.length===1?'':'s') + '?',
+    'Everyone goes in BCC, so no one sees the other addresses.' +
+    (missing ? ' ' + missing + ' video' + (missing===1?' has':'s have') + ' no uploader email and will not be included.' : ''),
+    function(){
+      var evt = ((S.config.eventName||'') + ' ' + (S.config.eventYear||'')).trim();
+      var to = S.config.helpEmail || 'Rob@r3mediapro.com';
+      var body = 'Hi everyone,\n\n\n\n' +
+                 'Send new versions straight into the tracker:\n' + PUBLIC_APP_URL + '\n\n' +
+                 'Thanks,\nThe video team\n';
+      var txt = list.join(', ');
+      function copied(){ }
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(txt).then(copied, function(){ fallbackCopy(txt); });
+      } else { fallbackCopy(txt); }
+      openMail('mailto:' + encodeURIComponent(to) +
+               '?bcc=' + encodeURIComponent(txt) +
+               '&subject=' + encodeURIComponent(evt + ' — video update') +
+               '&body=' + encodeURIComponent(body), '_blank');
+      toast('Drafting to ' + list.length + ' uploaders in BCC · addresses also copied.','ok');
+    }, { go:'Open email' });
 }
 
 var PROBLEM_LABEL = { upload:'Upload failed', link:'Link could not be sent', submit:'Submission failed',
