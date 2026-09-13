@@ -2190,6 +2190,10 @@ function filtered(){
   var q = S.q.toLowerCase().trim();
   return S.videos.filter(function(v){
     if(S.fStatus.length && S.fStatus.indexOf(v.status)<0) return false;
+    // A video cut from the show is not missing: the Missing tile already
+    // leaves it out of its count, so its filter must too. Still reachable
+    // through the Deleted chip.
+    if(isCut(v) && S.fStatus.indexOf('Pending')>=0 && S.fShow!=='Deleted') return false;
     if(S.fUploader && v.uploader!==S.fUploader) return false;
     if(S.fSection && (v.section||UNSECTIONED)!==S.fSection) return false;
     if(S.fNew && !videoIsNew(v)) return false;
@@ -2764,6 +2768,7 @@ function statusPill(v, kind){
   var col = (kind==='status' ? S.colours : S.showColours)[val] || '#64748b';
   var admin = S.me.role==='admin';
   if(!admin && kind==='status'){
+    if(isCut(v)) return '<span class="pill" style="background:'+hexa('#64748b',.14)+';color:'+legible('#64748b')+'" title="This video is no longer in the show">Cut from show</span>';
     if(!hasCut(v)) return '<span class="pill" style="background:'+hexa('#ef4444',.14)+';color:'+legible('#ef4444')+'">Missing</span>';
     return clientStatusSeg(v);
   }
@@ -3237,7 +3242,9 @@ function renderTable(){
             ? '<a href="'+esc(safeUrl(v.link))+'" target="_blank" rel="noopener">'+esc(v.fileName || (v.fileId?'Drive upload':shortUrl(v.link)))+'</a>'
             : hasCut(v)
               ? '<span class="onhand" title="Handed over — no link">'+esc(v.fileName || 'On hand')+'</span>'
-              : '<span style="color:var(--red);font-size:12px">missing</span>')+'</td>';
+              : isCut(v)
+                ? '<span style="color:var(--txt-3);font-size:12px" title="Cut from the show">cut</span>'
+                : '<span style="color:var(--red);font-size:12px">missing</span>')+'</td>';
         h += '<td class="t-notes" data-note="'+v.id+'" onclick="editNote(\''+v.id+'\',event)" title="Click to edit">'+
              (v.notes ? esc(v.notes) : '<span class="addnote">+ note</span>')+'</td>';
         h += '<td>'+v.history.length+'</td>';
