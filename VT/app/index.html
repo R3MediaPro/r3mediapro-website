@@ -3384,7 +3384,7 @@ function openMail(href){
 function uploaderEmailList(){
   var seen = {}, list = [];
   (S.videos||[]).forEach(function(v){
-    if(v.status === 'Deleted') return;
+    if(isCut(v)) return;                 // Deleted is a SHOW status, not a delivery one
     String(v.uploaderEmail||'').split(/[,;\s]+/).forEach(function(e){
       e = e.trim();
       if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) return;
@@ -3399,7 +3399,7 @@ function emailAllUploaders(){
   if(S.me.role !== 'admin') return;
   var list = uploaderEmailList();
   if(!list.length) return toast('No uploader emails on file yet.','err');
-  var missing = (S.videos||[]).filter(function(v){ return v.status!=='Deleted' && !v.uploaderEmail; }).length;
+  var missing = (S.videos||[]).filter(function(v){ return !isCut(v) && !v.uploaderEmail; }).length;
   confirmThen('Email ' + list.length + ' uploader' + (list.length===1?'':'s') + '?',
     'Everyone goes in BCC, so no one sees the other addresses.' +
     (missing ? ' ' + missing + ' video' + (missing===1?' has':'s have') + ' no uploader email and will not be included.' : ''),
