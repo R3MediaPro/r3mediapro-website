@@ -4862,7 +4862,16 @@ function runUpload(videoId, who, note){
       // upload never started, so there is nothing to recover.)
       var m = String((uploadErr && uploadErr.message) || uploadErr);
       if(m.indexOf('cancelled') >= 0 || !sess || step === 'file') throw uploadErr;
-      return finalize('');
+      return finalize('').catch(function(e2){
+        var m2 = String((e2 && e2.message) || e2);
+        if(!/could not be found/i.test(m2)) throw e2;
+        // Nothing in Drive: the transfer is what failed. Say that, with how far
+        // it got, instead of the lookup's "could not be found" — which hid the
+        // real error on every one of Becky's failed uploads.
+        step = 'drive';
+        var pct = (uploadErr && uploadErr.transferPct != null) ? uploadErr.transferPct : null;
+        throw new Error('The transfer to Drive stopped' + (pct != null ? ' at ' + pct + '%' : '') + '. ' + m);
+      });
     })
     .then(function(r){
       clearPending();
@@ -4895,7 +4904,8 @@ function runUpload(videoId, who, note){
         hint  = 'The tracker’s server did not answer, so nothing was sent yet. ' + msg + '  Try again in a minute, or paste a link instead.';
       } else if(step === 'drive'){
         title = 'Upload didn’t finish';
-        hint  = 'The transfer to Drive stopped. ' + msg + '  Try again — it starts over from the beginning.';
+        hint  = (/^The transfer to Drive stopped/.test(msg) ? msg : 'The transfer to Drive stopped. ' + msg) +
+                '  Try again — it starts over from the beginning. If it keeps stopping, copy the file to your Desktop first, keep this Mac awake, or paste a link instead.';
       } else {
         title = readPending() ? 'Your video is in Drive — not filed yet' : 'Upload could not be filed';
         hint  = readPending()
@@ -4976,7 +4986,13 @@ function sendChunks(url, file, started, hbKey){
     return putChunk(url, file.slice(offset, end), offset, end, file.size, started)
       .then(function(r){
         if(r.done) return r.data;
+        var before = offset;
         offset = r.next != null ? r.next : end;
+        // The recovery budget is per stall, not per upload. A fixed six for the
+        // whole file meant a 3 GB upload (about 380 chunks, eight minutes) that
+        // met a handful of brief network blips died near the end every time,
+        // while short uploads sailed through.
+        if(offset > before) recoveries = 0;
         setProgress(offset, file.size, null, started);
         heartbeat();
         return next();
@@ -4986,15 +5002,20 @@ function sendChunks(url, file, started, hbKey){
         // (or most of it). Before failing, ask Drive what it actually received —
         // this is what turns "network dropped but the video is in my Drive" into
         // a clean success instead of a false error.
-        if(S.abort || recoveries >= 6) throw e;
+        function givingUp(err){ err.transferPct = Math.round(offset / file.size * 100); return err; }
+        if(S.abort) throw e;
+        if(recoveries >= 6) throw givingUp(e);
         recoveries++;
         setProgress(offset, file.size, 'Connection hiccup — checking with Drive…', started);
-        return queryUploadStatus(url, file.size).then(function(q){
+        // give a blip (Wi-Fi roam, a sleeping Mac waking) a moment to clear
+        return new Promise(function(r){ setTimeout(r, 2000 * recoveries); }).then(function(){
+          return queryUploadStatus(url, file.size);
+        }).then(function(q){
           if(q.done) return q.data;                       // it finished after all
           offset = q.next != null ? q.next : offset;      // resume from what Drive has
           setProgress(offset, file.size, null, started);
           return next();
-        }, function(){ throw e; });                        // truly unreachable → real failure
+        }, function(){ throw givingUp(e); });              // truly unreachable → real failure
       });
   }
   return next();
